@@ -1,18 +1,18 @@
 # =============================================================================
-# Dagster ML Pipeline - Customer Churn Prediction
+# Pipeline ML Dagster - Prédiction du Churn Client
 # =============================================================================
 #
-# This pipeline demonstrates Dagster's asset-centric approach:
-# - Assets (data artifacts) as first-class citizens, not tasks
-# - Declarative: "what data should exist" vs "what tasks to run"
-# - Automatic dependency inference from function signatures
-# - Rich metadata (group_name, description, compute_kind)
-# - Think "what exists" not "what runs"
+# Ce pipeline démontre l'approche centrée sur les assets de Dagster :
+# - Assets (artefacts de données) comme citoyens de première classe, pas des tâches
+# - Déclaratif : "quelles données devraient exister" vs "quelles tâches exécuter"
+# - Inférence automatique des dépendances depuis les signatures de fonctions
+# - Métadonnées riches (group_name, description, compute_kind)
+# - Pensez "ce qui existe" pas "ce qui s'exécute"
 #
-# Run locally:
+# Exécuter localement :
 #   dagster dev -f Dagster_ML_Pipeline.py
 #
-# Or materialize assets:
+# Ou matérialiser les assets :
 #   python Dagster_ML_Pipeline.py
 # =============================================================================
 
@@ -29,20 +29,20 @@ import os
 
 # ---------------------------------------------------------------------------
 # Configuration
-# Defaults to Docker-hosted MLflow server (start with: cd docker && docker-compose up -d)
+# Par défaut, utilise le serveur MLflow Docker (démarrer avec : cd docker && docker-compose up -d)
 # ---------------------------------------------------------------------------
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 EXPERIMENT_NAME = "customer-churn-dagster"
-MODEL_NAME = "churn-predictor-dagster"  # For model registry
+MODEL_NAME = "churn-predictor-dagster"  # Pour le registre de modèles
 
-# Get project root (parent of pipelines/examples/)
+# Obtenir la racine du projet (parent de pipelines/examples/)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
 OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_dagster.csv")
 INFERENCE_OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_dagster_inference.csv")
 RANDOM_SEED = 42
 
-# Feature columns used for training
+# Colonnes de features utilisées pour l'entraînement
 FEATURE_COLS = [
     'recency_days', 'frequency', 'monetary_value', 'avg_order_value',
     'days_since_signup', 'total_orders', 'support_tickets', 'age',
@@ -52,30 +52,30 @@ FEATURE_COLS = [
 
 
 # =============================================================================
-# ASSETS - Think "what data should exist", not "what tasks to run"
+# ASSETS - Pensez "quelles données devraient exister", pas "quelles tâches exécuter"
 # =============================================================================
 
 @asset(
     group_name="data_ingestion",
-    description="Raw customer data loaded from CSV or generated synthetically",
+    description="Données clients brutes chargées depuis CSV ou générées synthétiquement",
     compute_kind="pandas"
 )
 def customer_data() -> pd.DataFrame:
     """
-    Load or generate customer data.
+    Charger ou générer les données clients.
 
-    DAGSTER KEY CONCEPT: This is an ASSET - a piece of data that exists.
-    Dagster thinks about data artifacts, not tasks.
+    CONCEPT CLÉ DAGSTER : C'est un ASSET - une donnée qui existe.
+    Dagster pense en termes d'artefacts de données, pas de tâches.
     """
-    print("Loading customer data...")
+    print("Chargement des données clients...")
 
-    # Try loading from CSV first
+    # Essayer de charger depuis CSV d'abord
     if os.path.exists(DATA_PATH):
-        print(f"Loading from {DATA_PATH}")
+        print(f"Chargement depuis {DATA_PATH}")
         df = pd.read_csv(DATA_PATH)
     else:
-        # Generate synthetic data (same as notebooks)
-        print("Generating synthetic customer data...")
+        # Générer des données synthétiques (identique aux notebooks)
+        print("Génération de données clients synthétiques...")
         np.random.seed(RANDOM_SEED)
         n_customers = 5000
 
@@ -91,7 +91,7 @@ def customer_data() -> pd.DataFrame:
             'age': np.random.randint(18, 70, n_customers),
         })
 
-        # Create target variable (churn)
+        # Créer la variable cible (churn)
         churn_prob = 1 / (1 + np.exp(-(
             0.02 * df['recency_days'] -
             0.1 * df['frequency'] -
@@ -101,70 +101,70 @@ def customer_data() -> pd.DataFrame:
         )))
         df['churned'] = (np.random.random(n_customers) < churn_prob).astype(int)
 
-    print(f"Loaded {len(df)} customers")
-    return df  # ✅ Return the data asset
+    print(f"{len(df)} clients chargés")
+    return df  # ✅ Retourner l'asset de données
 
 
 @asset(
     group_name="feature_engineering",
-    description="Engineered features including RFM scores and ratios",
+    description="Features créées incluant les scores RFM et les ratios",
     compute_kind="pandas"
 )
 def customer_features(customer_data: pd.DataFrame) -> pd.DataFrame:
     """
-    Create engineered features from raw customer data.
+    Créer des features à partir des données clients brutes.
 
-    DAGSTER KEY CONCEPT: Dependencies are inferred from function signature!
-    Dagster automatically knows this asset depends on `customer_data`.
+    CONCEPT CLÉ DAGSTER : Les dépendances sont inférées depuis la signature de fonction !
+    Dagster sait automatiquement que cet asset dépend de `customer_data`.
     """
-    print("Engineering features...")
+    print("Ingénierie des features...")
     df = customer_data.copy()
 
-    # Ratio features
+    # Features de ratio
     df['recency_frequency_ratio'] = df['recency_days'] / (df['frequency'] + 1)
     df['monetary_per_order'] = df['monetary_value'] / (df['total_orders'] + 1)
     df['order_frequency'] = df['total_orders'] / (df['days_since_signup'] + 1)
     df['support_per_order'] = df['support_tickets'] / (df['total_orders'] + 1)
 
-    # RFM score (Recency, Frequency, Monetary)
+    # Score RFM (Récence, Fréquence, Montant)
     df['r_score'] = pd.qcut(df['recency_days'], q=5, labels=[5, 4, 3, 2, 1]).astype(int)
     df['f_score'] = pd.qcut(df['frequency'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
     df['m_score'] = pd.qcut(df['monetary_value'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
     df['rfm_score'] = df['r_score'] + df['f_score'] + df['m_score']
 
-    print(f"Engineered features. Shape: {df.shape}")
-    return df  # ✅ Return the features asset
+    print(f"Features créées. Shape : {df.shape}")
+    return df  # ✅ Retourner l'asset de features
 
 
 @asset(
     group_name="model_training",
-    description="Trained Random Forest model with MLflow tracking",
+    description="Modèle Random Forest entraîné avec tracking MLflow",
     compute_kind="sklearn"
 )
 def churn_model(customer_features: pd.DataFrame) -> dict:
     """
-    Train Random Forest classifier on customer features.
+    Entraîner le classifieur Random Forest sur les features clients.
 
-    DAGSTER KEY CONCEPT: We return a dict containing the model and metadata.
-    This becomes an asset that other assets can depend on.
+    CONCEPT CLÉ DAGSTER : Nous retournons un dict contenant le modèle et les métadonnées.
+    Cela devient un asset dont d'autres assets peuvent dépendre.
     """
-    print("Training model...")
+    print("Entraînement du modèle...")
 
-    # Prepare data
+    # Préparer les données
     X = customer_features[FEATURE_COLS]
     y = customer_features['churned']
 
-    # Train/test split
+    # Séparation train/test
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=RANDOM_SEED, stratify=y
     )
 
-    # Configure MLflow
+    # Configurer MLflow
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name=f"dagster-{datetime.now().strftime('%Y%m%d-%H%M%S')}") as run:
-        # Model hyperparameters
+        # Hyperparamètres du modèle
         params = {
             "n_estimators": 200,
             "max_depth": 10,
@@ -172,24 +172,24 @@ def churn_model(customer_features: pd.DataFrame) -> dict:
             "random_state": RANDOM_SEED
         }
 
-        # Train model
+        # Entraîner le modèle
         model = RandomForestClassifier(**params, n_jobs=-1)
         model.fit(X_train, y_train)
 
-        # Log to MLflow
+        # Logger dans MLflow
         mlflow.log_params(params)
         mlflow.log_param("orchestrator", "dagster")
         mlflow.log_param("n_features", len(FEATURE_COLS))
         mlflow.log_param("training_samples", len(X_train))
 
-        # Log model artifact
+        # Logger l'artefact du modèle
         mlflow.sklearn.log_model(model, "model")
 
         mlflow_run_id = run.info.run_id
 
-    print(f"Model trained. MLflow run: {mlflow_run_id}")
+    print(f"Modèle entraîné. MLflow run : {mlflow_run_id}")
 
-    # ✅ Return model asset as dict (includes metadata)
+    # ✅ Retourner l'asset modèle comme dict (inclut les métadonnées)
     return {
         'model': model,
         'X_test': X_test,
@@ -201,27 +201,27 @@ def churn_model(customer_features: pd.DataFrame) -> dict:
 
 @asset(
     group_name="model_evaluation",
-    description="Model performance metrics (accuracy, precision, recall, F1)",
+    description="Métriques de performance du modèle (accuracy, precision, recall, F1)",
     compute_kind="sklearn"
 )
 def model_metrics(churn_model: dict) -> dict:
     """
-    Evaluate model performance on test set.
+    Évaluer les performances du modèle sur l'ensemble de test.
 
-    DAGSTER KEY CONCEPT: This asset depends on `churn_model` asset.
-    Dagster infers this from the function signature.
+    CONCEPT CLÉ DAGSTER : Cet asset dépend de l'asset `churn_model`.
+    Dagster infère cela depuis la signature de fonction.
     """
-    print("Evaluating model...")
+    print("Évaluation du modèle...")
 
     model = churn_model['model']
     X_test = churn_model['X_test']
     y_test = churn_model['y_test']
     mlflow_run_id = churn_model['mlflow_run_id']
 
-    # Predictions
+    # Prédictions
     y_pred = model.predict(X_test)
 
-    # Calculate metrics
+    # Calculer les métriques
     metrics = {
         'accuracy': accuracy_score(y_test, y_pred),
         'precision': precision_score(y_test, y_pred),
@@ -235,7 +235,7 @@ def model_metrics(churn_model: dict) -> dict:
     print(f"Recall:    {metrics['recall']:.4f}")
     print(f"F1 Score:  {metrics['f1']:.4f}")
 
-    # Log metrics to MLflow
+    # Logger les métriques dans MLflow
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     with mlflow.start_run(run_id=mlflow_run_id):
         mlflow.log_metric("accuracy", metrics['accuracy'])
@@ -243,31 +243,31 @@ def model_metrics(churn_model: dict) -> dict:
         mlflow.log_metric("recall", metrics['recall'])
         mlflow.log_metric("f1", metrics['f1'])
 
-    return metrics  # ✅ Return metrics asset
+    return metrics  # ✅ Retourner l'asset de métriques
 
 
 @asset(
     group_name="predictions",
-    description="Churn probability predictions for all customers",
+    description="Prédictions de probabilité de churn pour tous les clients",
     compute_kind="sklearn"
 )
 def customer_predictions(churn_model: dict, customer_features: pd.DataFrame) -> pd.DataFrame:
     """
-    Generate churn predictions for all customers.
+    Générer les prédictions de churn pour tous les clients.
 
-    DAGSTER KEY CONCEPT: This asset depends on BOTH `churn_model` AND `customer_features`.
-    Dagster automatically builds the correct execution graph.
+    CONCEPT CLÉ DAGSTER : Cet asset dépend À LA FOIS de `churn_model` ET de `customer_features`.
+    Dagster construit automatiquement le graphe d'exécution correct.
     """
-    print("Generating predictions...")
+    print("Génération des prédictions...")
 
     model = churn_model['model']
     X = customer_features[FEATURE_COLS]
 
-    # Generate predictions
+    # Générer les prédictions
     churn_probability = model.predict_proba(X)[:, 1]
     churn_predicted = model.predict(X)
 
-    # Create results dataframe
+    # Créer le dataframe des résultats
     predictions = pd.DataFrame({
         'customer_id': customer_features['customer_id'],
         'churn_probability': churn_probability,
@@ -275,33 +275,33 @@ def customer_predictions(churn_model: dict, customer_features: pd.DataFrame) -> 
         'predicted_at': datetime.now()
     })
 
-    print(f"Generated predictions for {len(predictions)} customers")
-    return predictions  # ✅ Return predictions asset
+    print(f"Prédictions générées pour {len(predictions)} clients")
+    return predictions  # ✅ Retourner l'asset de prédictions
 
 
 @asset(
     group_name="predictions",
-    description="Predictions saved to local CSV file",
+    description="Prédictions sauvegardées dans un fichier CSV local",
     compute_kind="csv"
 )
 def saved_predictions(customer_predictions: pd.DataFrame) -> dict:
     """
-    Save predictions to local CSV file.
+    Sauvegarder les prédictions dans un fichier CSV local.
 
-    DAGSTER KEY CONCEPT: Even I/O operations are assets!
-    This asset represents "predictions that have been persisted".
+    CONCEPT CLÉ DAGSTER : Même les opérations d'E/S sont des assets !
+    Cet asset représente "les prédictions qui ont été persistées".
     """
-    print(f"Saving predictions to {OUTPUT_PATH}...")
+    print(f"Sauvegarde des prédictions vers {OUTPUT_PATH}...")
 
-    # Ensure output directory exists
+    # S'assurer que le répertoire de sortie existe
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
-    # Save to CSV
+    # Sauvegarder en CSV
     customer_predictions.to_csv(OUTPUT_PATH, index=False)
 
-    print(f"Saved {len(customer_predictions)} predictions to {OUTPUT_PATH}")
+    print(f"{len(customer_predictions)} prédictions sauvegardées vers {OUTPUT_PATH}")
 
-    # ✅ Return metadata about what was saved
+    # ✅ Retourner les métadonnées sur ce qui a été sauvegardé
     return {
         'rows_saved': len(customer_predictions),
         'output_path': OUTPUT_PATH,
@@ -311,26 +311,26 @@ def saved_predictions(customer_predictions: pd.DataFrame) -> dict:
 
 @asset(
     group_name="model_registry",
-    description="Model registered to MLflow Model Registry",
+    description="Modèle enregistré dans le MLflow Model Registry",
     compute_kind="mlflow"
 )
 def registered_model(churn_model: dict, model_metrics: dict) -> dict:
     """
-    Register the trained model to MLflow Model Registry.
+    Enregistrer le modèle entraîné dans le MLflow Model Registry.
 
-    DAGSTER KEY CONCEPT: This asset depends on both the model AND metrics.
-    We only register models that have been evaluated.
+    CONCEPT CLÉ DAGSTER : Cet asset dépend à la fois du modèle ET des métriques.
+    Nous n'enregistrons que les modèles qui ont été évalués.
     """
-    print(f"Registering model to MLflow registry: {MODEL_NAME}")
+    print(f"Enregistrement du modèle dans le registre MLflow : {MODEL_NAME}")
 
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     model_uri = f"runs:/{churn_model['mlflow_run_id']}/model"
 
-    # Register model
+    # Enregistrer le modèle
     model_version = mlflow.register_model(model_uri, MODEL_NAME)
 
-    print(f"Registered {MODEL_NAME} version {model_version.version}")
-    print(f"Model accuracy: {model_metrics['accuracy']:.4f}")
+    print(f"Enregistré {MODEL_NAME} version {model_version.version}")
+    print(f"Accuracy du modèle : {model_metrics['accuracy']:.4f}")
 
     return {
         'model_name': MODEL_NAME,
@@ -342,41 +342,41 @@ def registered_model(churn_model: dict, model_metrics: dict) -> dict:
 
 
 # =============================================================================
-# INFERENCE ASSETS - Load from registry and predict
+# ASSETS D'INFÉRENCE - Charger depuis le registre et prédire
 # =============================================================================
 
 @asset(
     group_name="inference",
-    description="Model loaded from MLflow Model Registry for inference",
+    description="Modèle chargé depuis le MLflow Model Registry pour l'inférence",
     compute_kind="mlflow"
 )
 def inference_model() -> dict:
     """
-    Load model from MLflow Model Registry.
+    Charger le modèle depuis le MLflow Model Registry.
 
-    DAGSTER KEY CONCEPT: This is a SOURCE asset for inference - no dependencies.
-    It loads an already-registered model, decoupled from training.
+    CONCEPT CLÉ DAGSTER : C'est un asset SOURCE pour l'inférence - pas de dépendances.
+    Il charge un modèle déjà enregistré, découplé de l'entraînement.
 
-    In production, training and inference are separate pipelines.
+    En production, l'entraînement et l'inférence sont des pipelines séparés.
     """
-    print(f"Loading model {MODEL_NAME}/latest from registry...")
+    print(f"Chargement du modèle {MODEL_NAME}/latest depuis le registre...")
 
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     model_uri = f"models:/{MODEL_NAME}/latest"
 
     try:
         model = mlflow.sklearn.load_model(model_uri)
-        # Get model version info
+        # Récupérer les infos de version du modèle
         client = mlflow.tracking.MlflowClient()
         latest_version = client.get_latest_versions(MODEL_NAME, stages=["None"])[0]
         version = latest_version.version
     except Exception as e:
         raise RuntimeError(
-            f"Could not load model '{MODEL_NAME}' from registry. "
-            f"Run training pipeline first to register a model. Error: {e}"
+            f"Impossible de charger le modèle '{MODEL_NAME}' depuis le registre. "
+            f"Exécutez d'abord le pipeline d'entraînement pour enregistrer un modèle. Erreur : {e}"
         )
 
-    print(f"Loaded model version {version}")
+    print(f"Modèle version {version} chargé")
 
     return {
         'model': model,
@@ -388,23 +388,23 @@ def inference_model() -> dict:
 
 @asset(
     group_name="inference",
-    description="Fresh customer data for inference (separate from training data)",
+    description="Données clients fraîches pour l'inférence (séparées des données d'entraînement)",
     compute_kind="pandas"
 )
 def inference_customer_data() -> pd.DataFrame:
     """
-    Load customer data for inference.
+    Charger les données clients pour l'inférence.
 
-    DAGSTER KEY CONCEPT: This is separate from training data.
-    In production, this would load NEW customers to score.
+    CONCEPT CLÉ DAGSTER : C'est séparé des données d'entraînement.
+    En production, cela chargerait les NOUVEAUX clients à scorer.
     """
-    print("Loading customer data for inference...")
+    print("Chargement des données clients pour l'inférence...")
 
     if os.path.exists(DATA_PATH):
         df = pd.read_csv(DATA_PATH)
     else:
-        # Generate synthetic data
-        np.random.seed(RANDOM_SEED + 1)  # Different seed for variation
+        # Générer des données synthétiques
+        np.random.seed(RANDOM_SEED + 1)  # Seed différent pour la variation
         n_customers = 1000
 
         df = pd.DataFrame({
@@ -419,26 +419,26 @@ def inference_customer_data() -> pd.DataFrame:
             'age': np.random.randint(18, 70, n_customers),
         })
 
-    print(f"Loaded {len(df)} customers for inference")
+    print(f"{len(df)} clients chargés pour l'inférence")
     return df
 
 
 @asset(
     group_name="inference",
-    description="Engineered features for inference data",
+    description="Features créées pour les données d'inférence",
     compute_kind="pandas"
 )
 def inference_features(inference_customer_data: pd.DataFrame) -> pd.DataFrame:
     """
-    Engineer features for inference data.
+    Créer les features pour les données d'inférence.
 
-    DAGSTER KEY CONCEPT: Same feature engineering logic as training,
-    but applied to inference data (separate asset lineage).
+    CONCEPT CLÉ DAGSTER : Même logique d'ingénierie des features que l'entraînement,
+    mais appliquée aux données d'inférence (lignée d'assets séparée).
     """
-    print("Engineering features for inference...")
+    print("Ingénierie des features pour l'inférence...")
     df = inference_customer_data.copy()
 
-    # Same feature engineering as training
+    # Même ingénierie des features que l'entraînement
     df['recency_frequency_ratio'] = df['recency_days'] / (df['frequency'] + 1)
     df['monetary_per_order'] = df['monetary_value'] / (df['total_orders'] + 1)
     df['order_frequency'] = df['total_orders'] / (df['days_since_signup'] + 1)
@@ -449,23 +449,23 @@ def inference_features(inference_customer_data: pd.DataFrame) -> pd.DataFrame:
     df['m_score'] = pd.qcut(df['monetary_value'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
     df['rfm_score'] = df['r_score'] + df['f_score'] + df['m_score']
 
-    print(f"Inference features shape: {df.shape}")
+    print(f"Shape des features d'inférence : {df.shape}")
     return df
 
 
 @asset(
     group_name="inference",
-    description="Churn predictions from inference pipeline",
+    description="Prédictions de churn depuis le pipeline d'inférence",
     compute_kind="sklearn"
 )
 def inference_predictions(inference_model: dict, inference_features: pd.DataFrame) -> pd.DataFrame:
     """
-    Generate predictions using model from registry.
+    Générer les prédictions en utilisant le modèle du registre.
 
-    DAGSTER KEY CONCEPT: This depends on inference_model (from registry)
-    and inference_features (freshly computed), not the training pipeline.
+    CONCEPT CLÉ DAGSTER : Cela dépend de inference_model (du registre)
+    et inference_features (calculées à la volée), pas du pipeline d'entraînement.
     """
-    print("Running batch inference...")
+    print("Exécution de l'inférence en batch...")
 
     model = inference_model['model']
     X = inference_features[FEATURE_COLS]
@@ -482,29 +482,29 @@ def inference_predictions(inference_model: dict, inference_features: pd.DataFram
     })
 
     high_risk = (churn_probability > 0.7).sum()
-    print(f"Generated {len(predictions)} predictions ({high_risk} high-risk)")
+    print(f"{len(predictions)} prédictions générées ({high_risk} à haut risque)")
 
     return predictions
 
 
 @asset(
     group_name="inference",
-    description="Inference predictions saved to CSV",
+    description="Prédictions d'inférence sauvegardées en CSV",
     compute_kind="csv"
 )
 def saved_inference_predictions(inference_predictions: pd.DataFrame) -> dict:
     """
-    Save inference predictions to file.
+    Sauvegarder les prédictions d'inférence dans un fichier.
 
-    DAGSTER KEY CONCEPT: Separate output asset from training predictions.
+    CONCEPT CLÉ DAGSTER : Asset de sortie séparé des prédictions d'entraînement.
     """
-    print(f"Saving inference predictions to {INFERENCE_OUTPUT_PATH}...")
+    print(f"Sauvegarde des prédictions d'inférence vers {INFERENCE_OUTPUT_PATH}...")
 
     os.makedirs(os.path.dirname(INFERENCE_OUTPUT_PATH), exist_ok=True)
     inference_predictions.to_csv(INFERENCE_OUTPUT_PATH, index=False)
 
     high_risk = int((inference_predictions['churn_probability'] > 0.7).sum())
-    print(f"Saved {len(inference_predictions)} predictions ({high_risk} high-risk)")
+    print(f"{len(inference_predictions)} prédictions sauvegardées ({high_risk} à haut risque)")
 
     return {
         'rows_saved': len(inference_predictions),
@@ -515,11 +515,11 @@ def saved_inference_predictions(inference_predictions: pd.DataFrame) -> dict:
 
 
 # =============================================================================
-# DAGSTER DEFINITIONS
-# This registers all assets with Dagster
+# DÉFINITIONS DAGSTER
+# Ceci enregistre tous les assets avec Dagster
 # =============================================================================
 
-# Training assets (data prep → train → evaluate → register)
+# Assets d'entraînement (préparation données → entraînement → évaluation → enregistrement)
 training_assets = [
     customer_data,
     customer_features,
@@ -530,7 +530,7 @@ training_assets = [
     registered_model,
 ]
 
-# Inference assets (load from registry → predict → save)
+# Assets d'inférence (charger depuis le registre → prédire → sauvegarder)
 inference_assets = [
     inference_model,
     inference_customer_data,
@@ -539,20 +539,20 @@ inference_assets = [
     saved_inference_predictions,
 ]
 
-# All assets
+# Tous les assets
 all_assets = training_assets + inference_assets
 
 defs = Definitions(assets=all_assets)
 
 
 # =============================================================================
-# STANDALONE EXECUTION
+# EXÉCUTION STANDALONE
 # =============================================================================
 
 def run_training():
-    """Materialize training assets (train, evaluate, register)."""
+    """Matérialiser les assets d'entraînement (entraîner, évaluer, enregistrer)."""
     print("=" * 60)
-    print("TRAINING PIPELINE")
+    print("PIPELINE D'ENTRAÎNEMENT")
     print("=" * 60)
 
     result = materialize(training_assets)
@@ -562,22 +562,22 @@ def run_training():
         registered = result.output_for_node("registered_model")
 
         print("\n" + "=" * 60)
-        print("Training completed!")
+        print("Entraînement terminé !")
         print("=" * 60)
-        print(f"Model Performance:")
-        print(f"  Accuracy:  {metrics_result['accuracy']:.4f}")
-        print(f"  F1 Score:  {metrics_result['f1']:.4f}")
-        print(f"\nModel registered: {registered['model_name']} v{registered['model_version']}")
+        print(f"Performance du modèle :")
+        print(f"  Accuracy :  {metrics_result['accuracy']:.4f}")
+        print(f"  F1 Score :  {metrics_result['f1']:.4f}")
+        print(f"\nModèle enregistré : {registered['model_name']} v{registered['model_version']}")
     else:
-        print("Training failed!")
+        print("Entraînement échoué !")
 
     return result
 
 
 def run_inference():
-    """Materialize inference assets (load from registry, predict)."""
+    """Matérialiser les assets d'inférence (charger depuis le registre, prédire)."""
     print("=" * 60)
-    print("INFERENCE PIPELINE")
+    print("PIPELINE D'INFÉRENCE")
     print("=" * 60)
 
     result = materialize(inference_assets)
@@ -587,22 +587,22 @@ def run_inference():
         model_info = result.output_for_node("inference_model")
 
         print("\n" + "=" * 60)
-        print("Inference completed!")
+        print("Inférence terminée !")
         print("=" * 60)
-        print(f"Model used: {model_info['model_name']} v{model_info['model_version']}")
-        print(f"Predictions saved: {saved['rows_saved']}")
-        print(f"High-risk customers: {saved['high_risk_count']}")
-        print(f"Output file: {saved['output_path']}")
+        print(f"Modèle utilisé : {model_info['model_name']} v{model_info['model_version']}")
+        print(f"Prédictions sauvegardées : {saved['rows_saved']}")
+        print(f"Clients à haut risque : {saved['high_risk_count']}")
+        print(f"Fichier de sortie : {saved['output_path']}")
     else:
-        print("Inference failed!")
+        print("Inférence échouée !")
 
     return result
 
 
 def run_full():
-    """Materialize all assets (training + inference)."""
+    """Matérialiser tous les assets (entraînement + inférence)."""
     print("=" * 60)
-    print("FULL PIPELINE (Training + Inference)")
+    print("PIPELINE COMPLET (Entraînement + Inférence)")
     print("=" * 60)
 
     result = materialize(all_assets)
@@ -613,18 +613,18 @@ def run_full():
         saved = result.output_for_node("saved_inference_predictions")
 
         print("\n" + "=" * 60)
-        print("Full pipeline completed!")
+        print("Pipeline complet terminé !")
         print("=" * 60)
-        print("\nTRAINING RESULTS:")
-        print(f"  Accuracy:  {metrics_result['accuracy']:.4f}")
-        print(f"  F1 Score:  {metrics_result['f1']:.4f}")
-        print(f"  Model:     {registered['model_name']} v{registered['model_version']}")
-        print("\nINFERENCE RESULTS:")
-        print(f"  Predictions: {saved['rows_saved']}")
-        print(f"  High-risk:   {saved['high_risk_count']}")
-        print(f"  Output:      {saved['output_path']}")
+        print("\nRÉSULTATS D'ENTRAÎNEMENT :")
+        print(f"  Accuracy :   {metrics_result['accuracy']:.4f}")
+        print(f"  F1 Score :   {metrics_result['f1']:.4f}")
+        print(f"  Modèle :     {registered['model_name']} v{registered['model_version']}")
+        print("\nRÉSULTATS D'INFÉRENCE :")
+        print(f"  Prédictions :   {saved['rows_saved']}")
+        print(f"  Haut risque :   {saved['high_risk_count']}")
+        print(f"  Sortie :        {saved['output_path']}")
     else:
-        print("Pipeline failed!")
+        print("Pipeline échoué !")
 
     return result
 
@@ -633,7 +633,7 @@ if __name__ == "__main__":
     import sys
 
     print("=" * 60)
-    print("Customer Churn Prediction Pipeline (Dagster)")
+    print("Pipeline de Prédiction du Churn Client (Dagster)")
     print("=" * 60)
 
     mode = sys.argv[1] if len(sys.argv) > 1 else "full"
@@ -645,20 +645,20 @@ if __name__ == "__main__":
     elif mode == "full":
         run_full()
     else:
-        print(f"\nUnknown mode: {mode}")
-        print("\nUsage:")
-        print("  python Dagster_ML_Pipeline.py           # Full pipeline")
-        print("  python Dagster_ML_Pipeline.py train     # Training only")
-        print("  python Dagster_ML_Pipeline.py inference # Inference only")
-        print("\nWith Dagster UI (recommended):")
+        print(f"\nMode inconnu : {mode}")
+        print("\nUtilisation :")
+        print("  python Dagster_ML_Pipeline.py           # Pipeline complet")
+        print("  python Dagster_ML_Pipeline.py train     # Entraînement uniquement")
+        print("  python Dagster_ML_Pipeline.py inference # Inférence uniquement")
+        print("\nAvec l'UI Dagster (recommandé) :")
         print("  dagster dev -f Dagster_ML_Pipeline.py")
         sys.exit(1)
 
     print("\n" + "=" * 60)
-    print(f"View experiments at: {MLFLOW_TRACKING_URI}")
-    print("Launch Dagster UI: dagster dev -f Dagster_ML_Pipeline.py")
+    print(f"Voir les expériences sur : {MLFLOW_TRACKING_URI}")
+    print("Lancer l'UI Dagster : dagster dev -f Dagster_ML_Pipeline.py")
     print("=" * 60)
-    print("\nUsage:")
-    print("  python Dagster_ML_Pipeline.py           # Full pipeline")
-    print("  python Dagster_ML_Pipeline.py train     # Training only")
-    print("  python Dagster_ML_Pipeline.py inference # Inference only")
+    print("\nUtilisation :")
+    print("  python Dagster_ML_Pipeline.py           # Pipeline complet")
+    print("  python Dagster_ML_Pipeline.py train     # Entraînement uniquement")
+    print("  python Dagster_ML_Pipeline.py inference # Inférence uniquement")

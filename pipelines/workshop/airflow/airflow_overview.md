@@ -29,83 +29,83 @@ XCom        Cross-communication between tasks (key-value store)
 
 ## The Pain Points (Why We Focus on Prefect)
 
-### Pain Point 1: XCom Limitations
+### Point Douloureux 1 : Limitations de XCom
 
-XCom is how tasks share data, but it has a **48KB limit** by default.
+XCom est la façon dont les tâches partagent des données, mais il a une **limite de 48KB** par défaut.
 
-**Problem**: You can't pass DataFrames through XCom.
+**Problème** : Vous ne pouvez pas passer des DataFrames via XCom.
 
 ```python
-# What you WANT to do (but can't):
+# Ce que vous VOULEZ faire (mais ne pouvez pas) :
 def load_data(**context):
     df = pd.read_csv('data.csv')
-    return df  # Too large for XCom!
+    return df  # Trop gros pour XCom !
 
-# What you HAVE to do:
+# Ce que vous DEVEZ faire :
 def load_data(**context):
     df = pd.read_csv('data.csv')
 
-    # Save to disk
+    # Sauvegarder sur disque
     temp_path = f"/tmp/data_{context['run_id']}.parquet"
     df.to_parquet(temp_path)
 
-    # Push the PATH (not the data)
+    # Pousser le CHEMIN (pas les données)
     context['ti'].xcom_push(key='data_path', value=temp_path)
 ```
 
-### Pain Point 2: File I/O Everywhere
+### Point Douloureux 2 : I/O Fichier Partout
 
-Every task that needs data must:
-1. Pull the file path from XCom
-2. Load data from disk
-3. Process it
-4. Save to a new file
-5. Push the new path to XCom
+Chaque tâche qui a besoin de données doit :
+1. Tirer le chemin du fichier depuis XCom
+2. Charger les données depuis le disque
+3. Les traiter
+4. Sauvegarder dans un nouveau fichier
+5. Pousser le nouveau chemin vers XCom
 
 ```python
 def process_data(**context):
-    # Pull path from previous task
+    # Tirer le chemin de la tâche précédente
     path = context['ti'].xcom_pull(key='data_path', task_ids='load_data')
 
-    # Load from disk
+    # Charger depuis le disque
     df = pd.read_parquet(path)
 
-    # Process
+    # Traiter
     df = df.dropna()
 
-    # Save to new file
+    # Sauvegarder dans un nouveau fichier
     new_path = f"/tmp/processed_{context['run_id']}.parquet"
     df.to_parquet(new_path)
 
-    # Push new path
+    # Pousser le nouveau chemin
     context['ti'].xcom_push(key='data_path', value=new_path)
 ```
 
-**Compare with Prefect:**
+**Comparez avec Prefect :**
 ```python
 @task
 def process_data(df: pd.DataFrame) -> pd.DataFrame:
-    return df.dropna()  # That's it!
+    return df.dropna()  # C'est tout !
 ```
 
-### Pain Point 3: Manual Cleanup
+### Point Douloureux 3 : Nettoyage Manuel
 
-All those temp files? You need to clean them up:
+Tous ces fichiers temporaires ? Vous devez les nettoyer :
 
 ```python
 def cleanup_temp_files(**context):
-    """Delete all temp files created during the DAG run."""
+    """Supprimer tous les fichiers temporaires créés pendant l'exécution du DAG."""
     paths = []
     paths.append(context['ti'].xcom_pull(key='data_path', task_ids='load_data'))
     paths.append(context['ti'].xcom_pull(key='data_path', task_ids='process'))
     paths.append(context['ti'].xcom_pull(key='model_path', task_ids='train'))
-    # ... every task that created a file
+    # ... chaque tâche qui a créé un fichier
 
     for path in paths:
         if path and os.path.exists(path):
             os.remove(path)
 
-# Must run after everything, even on failure
+# Doit s'exécuter après tout, même en cas d'échec
 cleanup_task = PythonOperator(
     task_id='cleanup',
     python_callable=cleanup_temp_files,
@@ -114,9 +114,9 @@ cleanup_task = PythonOperator(
 )
 ```
 
-### Pain Point 4: Verbose Configuration
+### Point Douloureux 4 : Configuration Verbeuse
 
-Before any business logic, you need ~30 lines of boilerplate:
+Avant toute logique métier, vous avez besoin de ~30 lignes de code passe-partout :
 
 ```python
 from airflow import DAG
@@ -142,7 +142,7 @@ dag = DAG(
     tags=['ml', 'training'],
 )
 
-# NOW you can define tasks...
+# MAINTENANT vous pouvez définir les tâches...
 load_task = PythonOperator(
     task_id='load_data',
     python_callable=load_data,
@@ -150,90 +150,90 @@ load_task = PythonOperator(
 )
 ```
 
-### Pain Point 5: Dependencies Declared Separately
+### Point Douloureux 5 : Dépendances Déclarées Séparément
 
-Task dependencies are defined separately from the functions:
+Les dépendances entre tâches sont définies séparément des fonctions :
 
 ```python
-# Define tasks
+# Définir les tâches
 load = PythonOperator(task_id='load', ...)
 process = PythonOperator(task_id='process', ...)
 train = PythonOperator(task_id='train', ...)
 evaluate = PythonOperator(task_id='evaluate', ...)
 
-# Dependencies declared separately (easy to get wrong)
+# Dépendances déclarées séparément (facile de se tromper)
 load >> process >> train >> evaluate
 ```
 
-**Compare with Prefect:**
+**Comparez avec Prefect :**
 ```python
 @flow
 def pipeline():
     data = load()
-    processed = process(data)  # Dependency is obvious!
+    processed = process(data)  # La dépendance est évidente !
     model = train(processed)
     evaluate(model)
 ```
 
 ---
 
-## Reference Implementation
+## Implémentation de Référence
 
-See the complete Airflow implementation:
+Voir l'implémentation Airflow complète :
 
 ```
 pipelines/examples/Airflow_ML_Pipeline.py
 ```
 
-This file implements the same ML pipeline as Prefect and Dagster, showing:
-- XCom push/pull patterns
-- File I/O for DataFrames
-- Cleanup task implementation
-- MLflow integration with Airflow
-- `**context` kwargs usage
+Ce fichier implémente le même pipeline ML que Prefect et Dagster, montrant :
+- Les patterns de push/pull XCom
+- L'I/O fichier pour les DataFrames
+- L'implémentation de la tâche de nettoyage
+- L'intégration MLflow avec Airflow
+- L'utilisation des kwargs `**context`
 
-### Key Sections to Review
+### Sections Clés à Revoir
 
-| Line Range | What It Shows |
-|------------|---------------|
-| 44-48 | Configuration and paths |
-| 60-100 | `load_customer_data` with XCom push |
-| 100-140 | `engineer_features` with XCom pull/push |
-| 200-250 | `train_model` with pickle serialization |
-| 350-380 | `cleanup_temp_files` task |
-| 400-450 | DAG definition and task wiring |
-
----
-
-## When Airflow Makes Sense
-
-Despite the complexity, Airflow is the right choice when:
-
-| Scenario | Why Airflow |
-|----------|-------------|
-| Existing infrastructure | Your company already uses it |
-| Cross-system orchestration | Need to coordinate Spark, databases, cloud services |
-| Enterprise requirements | Audit logs, RBAC, compliance |
-| Dedicated platform team | Can handle the operational complexity |
-| Non-Python workflows | Need BashOperator, KubernetesOperator, etc. |
+| Plage de Lignes | Ce Qu'Elle Montre |
+|------------------|-------------------|
+| 44-48 | Configuration et chemins |
+| 60-100 | `load_customer_data` avec push XCom |
+| 100-140 | `engineer_features` avec pull/push XCom |
+| 200-250 | `train_model` avec sérialisation pickle |
+| 350-380 | Tâche `cleanup_temp_files` |
+| 400-450 | Définition du DAG et câblage des tâches |
 
 ---
 
-## Summary: Airflow vs Prefect
+## Quand Airflow a du Sens
+
+Malgré la complexité, Airflow est le bon choix quand :
+
+| Scénario | Pourquoi Airflow |
+|----------|------------------|
+| Infrastructure existante | Votre entreprise l'utilise déjà |
+| Orchestration inter-systèmes | Besoin de coordonner Spark, bases de données, services cloud |
+| Exigences d'entreprise | Journaux d'audit, RBAC, conformité |
+| Équipe plateforme dédiée | Peut gérer la complexité opérationnelle |
+| Workflows non-Python | Besoin de BashOperator, KubernetesOperator, etc. |
+
+---
+
+## Résumé : Airflow vs Prefect
 
 | Aspect | Airflow | Prefect |
-|--------|---------|---------|
-| Data passing | XCom + temp files | Return values |
-| Configuration | 30+ lines boilerplate | 2 decorators |
-| Cleanup | Manual task required | Automatic |
-| Dependencies | `task1 >> task2` | Function calls |
-| Type hints | Not supported | Native Python |
-| Learning curve | Steep | Gentle |
+|--------|---------|---------|  
+| Passage de données | XCom + fichiers temp | Valeurs de retour |
+| Configuration | 30+ lignes passe-partout | 2 décorateurs |
+| Nettoyage | Tâche manuelle requise | Automatique |
+| Dépendances | `task1 >> task2` | Appels de fonction |
+| Annotations de type | Non supportées | Python natif |
+| Courbe d'apprentissage | Raide | Douce |
 
 ---
 
-## Next Steps
+## Prochaines Étapes
 
-1. **Review the example**: Open `pipelines/examples/Airflow_ML_Pipeline.py`
-2. **Compare with Prefect**: Look at the same operations in `pipelines/examples/Prefect_ML_Pipeline.py`
-3. **Understand the trade-offs**: Airflow's complexity buys you enterprise features and ecosystem
+1. **Revoir l'exemple** : Ouvrir `pipelines/examples/Airflow_ML_Pipeline.py`
+2. **Comparer avec Prefect** : Regarder les mêmes opérations dans `pipelines/examples/Prefect_ML_Pipeline.py`
+3. **Comprendre les compromis** : La complexité d'Airflow vous apporte des fonctionnalités d'entreprise et un écosystème

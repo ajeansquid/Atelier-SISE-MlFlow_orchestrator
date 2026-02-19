@@ -1,56 +1,56 @@
-# MLflow + Orchestrators Workshop
+# Atelier MLflow + Orchestrateurs
 
-## Context
+## Contexte
 
-**Duration:** 3 hours
-**Audience:** Master 2 SISE students (mixed profiles: data scientists, ML engineers, data engineers)
-**Goal:** Learn MLOps practices - orchestrate ML pipelines with scheduling and automation, track experiments with MLflow
+**Durée :** 3 heures
+**Public :** Étudiants Master 2 SISE (profils mixtes : data scientists, ML engineers, data engineers)
+**Objectif :** Apprendre les pratiques MLOps - orchestrer des pipelines ML avec planification et automatisation, suivre les expérimentations avec MLflow
 
 ---
 
-## Workshop Progression
+## Progression de l'Atelier
 
-The pedagogical journey covers the **full ML pipeline**:
+Le parcours pédagogique couvre le **pipeline ML complet** :
 
 ```
-DEVELOP -> TRACK -> REGISTER -> AUTOMATE -> MONITOR
+DÉVELOPPER → SUIVRE → ENREGISTRER → SERVIR → AUTOMATISER
 ```
 
-### Phase 1: MLflow Fundamentals (Notebooks)
+### Phase 1 : Fondamentaux MLflow (Notebooks)
 
-| Notebook | Purpose |
+| Notebook | Objectif |
 |----------|---------|
-| `01_messy_notebook.ipynb` | Starting point - typical data science chaos |
-| `01b_mlflow_transition.ipynb` | Interactive guided transition to MLflow |
-| `02_mlflow_organized.ipynb` | Complete MLflow reference solution |
+| `01_messy_notebook.ipynb` | Point de départ - chaos typique de data science |
+| `01b_mlflow_transition.ipynb` | Transition guidée interactive vers MLflow |
+| `02_mlflow_organized.ipynb` | Solution de référence MLflow complète |
 
-**MLflow Transition Structure:**
-- Part 1: Fully guided (tracking basics)
-- Part 2: Progressive reveal (models, artifacts, search)
-- Part 3: Fill-in-the-blanks (exercises)
-- Part 4: Serving & inference (registry, load, serve, batch inference)
+**Structure de la Transition MLflow :**
+- Partie 1 : Guidage complet (bases du tracking)
+- Partie 2 : Découverte progressive (modèles, artefacts, recherche)
+- Partie 3 : Exercices à compléter
+- Partie 4 : Serving & inférence (registre, chargement, service, inférence batch)
 
-### Phase 2: Orchestration with Automation (Main Focus)
+### Phase 2 : Orchestration avec Automatisation (Focus Principal)
 
-**Prefect Workshop** (`pipelines/workshop/prefect/Prefect_Workshop.py`):
-- Part 1: Tasks & Flows (basics)
-- Part 2: Resilience (retries, exponential backoff)
-- Part 3: Efficiency (caching, parallel model training)
-- Part 4: Flexibility (parameters, subflows)
-- Part 5: Full Pipeline with MLflow integration
-- **Part 6: AUTOMATION - Deploy, schedule, watch it run!**
+**Atelier Prefect** (`pipelines/workshop/prefect/Prefect_Workshop.py`) :
+- Partie 1 : Tasks & Flows (bases)
+- Partie 2 : Résilience (réessais, backoff exponentiel)
+- Partie 3 : Efficacité (cache, entraînement de modèles en parallèle)
+- Partie 4 : Flexibilité (paramètres, sous-flows)
+- Partie 5 : Pipeline complet avec intégration MLflow
+- **Partie 6 : AUTOMATISATION - Déployer, planifier, regarder l'exécution !**
 
-### Phase 3: Dagster Bonus
+### Phase 3 : Bonus Dagster
 
-**Dagster Workshop** (`pipelines/workshop/dagster/Dagster_Workshop.py`):
-- Transform tasks to assets
-- Automatic dependency inference
-- Jobs and schedules for automation
-- Visual asset lineage
+**Atelier Dagster** (`pipelines/workshop/dagster/Dagster_Workshop.py`) :
+- Transformer les tâches en assets
+- Inférence automatique des dépendances
+- Jobs et planifications pour l'automatisation
+- Lignage visuel des assets
 
 ---
 
-## Architecture: Docker-Based Orchestration
+## Architecture : Orchestration Basée sur Docker
 
 ```
 +-------------------------------------------------------------------------+
@@ -73,281 +73,315 @@ DEVELOP -> TRACK -> REGISTER -> AUTOMATE -> MONITOR
 |                    Logs experiments to MLflow                            |
 +-------------------------------------------------------------------------+
 
-YOUR MACHINE:
-  - VS Code with notebooks (learning)
-  - Deploy flows via CLI
-  - Watch automation in UIs
+VOTRE MACHINE :
+  - VS Code avec notebooks (apprentissage)
+  - Déployer les flows via CLI
+  - Observer l'automatisation dans les interfaces
 ```
 
-**Key Point:** This is REAL orchestration. Flows run automatically on schedules. Workers execute them. You watch in the UIs.
+**Point Clé :** Il s'agit d'une VRAIE orchestration. Les flows s'exécutent automatiquement selon des plannings. Les workers les exécutent. Vous observez dans les interfaces.
 
 ---
 
-## Quick Start
+## Prérequis
 
-### 1. Start the Stack
+| Outil | Version | Objectif |
+|------|---------|---------|
+| **Python** | >= 3.10 | Tous les pipelines et notebooks |
+| **Docker** & **Docker Compose** | Récente | Serveur MLflow, serveur/worker Prefect, Dagster |
+| **VS Code** | Récente | Notebooks, édition de code |
+| **Git** | Toute version | Cloner le dépôt |
+
+---
+
+## Démarrage Rapide
+
+### 1. Démarrer la Stack
 
 ```bash
-# Start MLflow + Prefect (server + worker)
+# Démarrer MLflow + Prefect (serveur + worker)
 docker-compose up -d
 
-# Verify services
+# Vérifier les services
 docker-compose ps
-# Wait for "healthy" status
+# Attendre le statut "healthy"
 
-# Optional: Add Dagster
+# Optionnel : Ajouter Dagster
 docker-compose --profile dagster up -d
 ```
 
-### 2. Install Local Dependencies
+### 2. Installer les Dépendances Locales
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Access the UIs
+### 3. Générer les Données d'Exemple
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| **Prefect** | http://localhost:4200 | Flow deployments, runs, schedules |
-| **MLflow** | http://localhost:5000 | Experiments, models, artifacts |
-| **Dagster** | http://localhost:3000 | Asset graph, materializations (bonus) |
-
-### 4. Run the Workshop
-
-**Learn the patterns (Parts 1-5):**
 ```bash
-python pipelines/workshop/prefect/Prefect_Workshop.py part1  # Tasks & Flows
-python pipelines/workshop/prefect/Prefect_Workshop.py part2  # Retries
-python pipelines/workshop/prefect/Prefect_Workshop.py part3  # Caching & Parallelism
-python pipelines/workshop/prefect/Prefect_Workshop.py part4  # Parameters
-python pipelines/workshop/prefect/Prefect_Workshop.py part5  # Full Pipeline + MLflow
+python generate_sample_data.py
 ```
 
-**See real automation (Part 6):**
+Cela crée `data/customer_data.csv` utilisé par tous les pipelines.
+
+### 4. Accéder aux Interfaces
+
+| Service | URL | Objectif |
+|---------|-----|---------|
+| **Prefect** | http://localhost:4200 | Déploiements de flows, exécutions, planifications |
+| **MLflow** | http://localhost:5000 | Expérimentations, modèles, artefacts |
+| **Dagster** | http://localhost:3000 | Graphe d'assets, matérialisations (bonus) |
+
+### 5. Exécuter l'Atelier
+
+**Apprendre les patterns (Parties 1-5) :**
+```bash
+python pipelines/workshop/prefect/Prefect_Workshop.py part1  # Tasks & Flows
+python pipelines/workshop/prefect/Prefect_Workshop.py part2  # Réessais
+python pipelines/workshop/prefect/Prefect_Workshop.py part3  # Cache & Parallélisme
+python pipelines/workshop/prefect/Prefect_Workshop.py part4  # Paramètres
+python pipelines/workshop/prefect/Prefect_Workshop.py part5  # Pipeline Complet + MLflow
+```
+
+**Voir l'automatisation réelle (Partie 6) :**
 ```bash
 python pipelines/workshop/prefect/Prefect_Workshop.py deploy
 ```
 
-This deploys a scheduled flow that runs every 2 minutes. Watch:
-- **Prefect UI**: See deployments and automatic runs
-- **MLflow UI**: See experiments appearing automatically
+Cela déploie un flow planifié qui s'exécute toutes les 2 minutes. Observez :
+- **Interface Prefect** : Voir les déploiements et les exécutions automatiques
+- **Interface MLflow** : Voir les expérimentations apparaître automatiquement
 
-**Dagster bonus:**
+**Bonus Dagster :**
 ```bash
 docker-compose --profile dagster up -d
-# Open http://localhost:3000
-# Enable schedule: Overview > Schedules > churn_training_schedule
-# Watch runs appear every 2 minutes!
+# Ouvrir http://localhost:3000
+
+# Ou exécuter depuis la ligne de commande :
+python pipelines/workshop/dagster/Dagster_Workshop.py full       # Matérialiser tous les assets
+python pipelines/workshop/dagster/Dagster_Workshop.py data       # Préparation des données uniquement
+python pipelines/workshop/dagster/Dagster_Workshop.py selective  # Matérialisation sélective
+
+# Activer la planification dans l'interface : Overview > Schedules > churn_training_schedule
+# Observer les exécutions apparaître toutes les 2 minutes !
+```
+
+**Vue d'ensemble Airflow (lecture guidée) :**
+
+Lire `pipelines/workshop/airflow/airflow_overview.md` pour comprendre les points de friction d'Airflow pour les workflows ML. Ensuite comparer avec l'implémentation de référence dans `pipelines/examples/Airflow_ML_Pipeline.py`.
+
+---
+
+## Structure du Projet
+
+```
+├── notebooks/                        # Notebooks Jupyter
+│   ├── 01_messy_notebook.ipynb       # Point de départ - chaos
+│   ├── 01b_mlflow_transition.ipynb   # Transition MLflow guidée
+│   └── 02_mlflow_organized.ipynb     # Solution MLflow complète
+│
+├── pipelines/
+│   ├── workshop/                     # Matériel d'apprentissage
+│   │   ├── prefect/
+│   │   │   └── Prefect_Workshop.py   # Atelier en 6 parties (avec automatisation !)
+│   │   ├── dagster/
+│   │   │   └── Dagster_Workshop.py   # Bonus centré sur les assets (avec planifications !)
+│   │   └── airflow/
+│   │       └── airflow_overview.md   # Guide des points de friction
+│   │
+│   └── examples/                     # Implémentations de référence
+│       ├── Prefect_ML_Pipeline.py
+│       ├── Airflow_ML_Pipeline.py
+│       └── Dagster_ML_Pipeline.py
+│
+├── docs/
+│   ├── mlflow_cheatsheet.md          # Référence rapide
+│   ├── README_DOCKER.md              # Instructions de configuration Docker
+│   ├── mlflow/                       # PDFs de cours
+│   └── airflow/                      # PDFs de cours
+│
+├── data/                             # Données générées
+│   └── customer_data.csv
+│
+├── docker-compose.yml                # MLflow + Prefect + Dagster
+├── Dockerfile.prefect                # Image worker Prefect
+├── Dockerfile.dagster                # Image de base Dagster (webserver + daemon)
+├── requirements.txt
+└── generate_sample_data.py
 ```
 
 ---
 
-## Project Structure
+## Services Docker
 
-```
-+-- notebooks/                        # Jupyter notebooks
-|   +-- 01_messy_notebook.ipynb       # Starting point - chaos
-|   +-- 01b_mlflow_transition.ipynb   # Guided MLflow transition
-|   +-- 02_mlflow_organized.ipynb     # Complete MLflow solution
-|
-+-- pipelines/
-|   +-- workshop/                     # Learning materials
-|   |   +-- prefect/
-|   |   |   +-- Prefect_Workshop.py   # 6-part workshop (with automation!)
-|   |   +-- dagster/
-|   |   |   +-- Dagster_Workshop.py   # Asset-centric bonus (with schedules!)
-|   |   +-- airflow/
-|   |       +-- airflow_overview.md   # Pain points guide
-|   |
-|   +-- examples/                     # Reference implementations
-|       +-- Prefect_ML_Pipeline.py
-|       +-- Airflow_ML_Pipeline.py
-|       +-- Dagster_ML_Pipeline.py
-|
-+-- docs/
-|   +-- mlflow_cheatsheet.md          # Quick reference
-|   +-- README_DOCKER.md              # Docker setup instructions
-|   +-- mlflow/                       # Course PDFs
-|   +-- airflow/                      # Course PDFs
-|
-+-- data/                             # Generated data
-|   +-- customer_data.csv
-|
-+-- docker-compose.yml                # MLflow + Prefect + Dagster
-+-- Dockerfile.prefect                # Prefect worker image
-+-- Dockerfile.dagster                # Dagster base image (webserver + daemon)
-+-- requirements.txt
-+-- generate_sample_data.py
-```
-
----
-
-## Docker Services
-
-| Service | Port | Purpose | Default |
+| Service | Port | Objectif | Par défaut |
 |---------|------|---------|---------|
-| **mlflow** | 5000 | Experiment tracking, model registry | Yes |
-| **prefect-server** | 4200 | Flow monitoring, deployments, schedules | Yes |
-| **prefect-worker** | - | Executes scheduled flows | Yes |
-| **dagster-webserver** | 3000 | Asset graph UI (bonus) | `--profile dagster` |
-| **dagster-daemon** | - | Executes scheduled jobs (bonus) | `--profile dagster` |
+| **mlflow** | 5000 | Tracking d'expérimentations, registre de modèles | Oui |
+| **prefect-server** | 4200 | Monitoring de flows, déploiements, planifications | Oui |
+| **prefect-worker** | - | Exécute les flows planifiés | Oui |
+| **dagster-webserver** | 3000 | Interface du graphe d'assets (bonus) | `--profile dagster` |
+| **dagster-daemon** | - | Exécute les jobs planifiés (bonus) | `--profile dagster` |
 
-### Commands
+### Commandes
 
 ```bash
-# Main workshop (MLflow + Prefect)
+# Atelier principal (MLflow + Prefect)
 docker-compose up -d
 
-# With Dagster bonus
+# Avec bonus Dagster
 docker-compose --profile dagster up -d
 
-# Stop all
+# Tout arrêter
 docker-compose down
 
-# Clean slate (remove data)
+# Table rase (supprimer les données)
 docker-compose down -v
 
-# View logs
+# Voir les logs
 docker-compose logs -f prefect-worker
 docker-compose logs -f mlflow
 docker-compose logs -f dagster-daemon
 ```
 
-See `docs/README_DOCKER.md` for detailed Docker instructions.
+Voir `docs/README_DOCKER.md` pour les instructions Docker détaillées.
 
 ---
 
-## Orchestrators Covered
+## Orchestrateurs Couverts
 
-| Tool | Coverage | Role |
+| Outil | Couverture | Rôle |
 |------|----------|------|
-| **Prefect** | Main focus | Hands-on practice, Pythonic approach, real automation |
-| **Dagster** | Bonus | Modern alternative, asset-centric paradigm |
-| **Airflow** | Overview | Industry standard reference, shows complexity |
+| **Prefect** | Focus principal | Pratique hands-on, approche Pythonique, automatisation réelle |
+| **Dagster** | Bonus | Alternative moderne, paradigme centré sur les assets |
+| **Airflow** | Vue d'ensemble | Référence standard de l'industrie, montre la complexité |
 
 ---
 
-## Key Orchestration Patterns
+## Patterns d'Orchestration Clés
 
-The workshop teaches orchestration patterns through ML use cases:
+L'atelier enseigne les patterns d'orchestration à travers des cas d'usage ML :
 
-| Pattern | ML Problem | Solution |
+| Pattern | Problème ML | Solution |
 |---------|-----------|----------|
-| **Retries** | API fails randomly | `@task(retries=3, retry_delay_seconds=60)` |
-| **Exponential Backoff** | Rate limits | `retry_delay_seconds=[10, 30, 60]` |
-| **Caching** | Expensive feature engineering | `cache_key_fn=task_input_hash` |
-| **Parallelism** | Comparing multiple models | Run training tasks in parallel |
-| **Parameters** | Hyperparameter tuning | `@flow` with typed arguments |
-| **Schedules** | Daily retraining | `cron="0 6 * * *"` |
+| **Réessais** | Échecs aléatoires d'API | `@task(retries=3, retry_delay_seconds=60)` |
+| **Backoff Exponentiel** | Limites de débit | `retry_delay_seconds=[10, 30, 60]` |
+| **Cache** | Feature engineering coûteux | `cache_key_fn=task_input_hash` |
+| **Parallélisme** | Comparer plusieurs modèles | Exécuter les tâches d'entraînement en parallèle |
+| **Paramètres** | Tuning d'hyperparamètres | `@flow` avec arguments typés |
+| **Planifications** | Réentraînement quotidien | `cron="0 6 * * *"` |
 
 ---
 
-## The Three Orchestrators Compared
+## Comparaison des Trois Orchestrateurs
 
-### Airflow - Operations-First, Task-Centric
+### Airflow - Infrastructure Lourde, Centré sur les Tâches
 
-**Philosophy:** "I define a graph of tasks to execute"
+**Philosophie :** "Je définis un graphe de tâches à exécuter"
 
-**Pain points for ML:**
-- XCom limited to 48KB - must serialize DataFrames to disk
-- Requires cleanup tasks for temp files
-- Heavy infrastructure
+**Points de friction pour le ML :**
+- XCom limité à 48KB - doit sérialiser les DataFrames sur disque
+- Nécessite des tâches de nettoyage pour les fichiers temporaires
+- Infrastructure lourde
 
-### Prefect - Code-First, Task-Centric
+### Prefect - Pythonique, Centré sur les Tâches
 
-**Philosophy:** "I write Python functions, Prefect handles orchestration"
+**Philosophie :** "J'écris des fonctions Python, Prefect gère l'orchestration"
 
-**Why it's better for ML:**
+**Pourquoi c'est mieux pour le ML :**
 ```python
 @task(retries=3)
 def my_task(input_df: pd.DataFrame) -> pd.DataFrame:
-    return result_df  # Just return it! No I/O!
+    return result_df  # Juste le retourner ! Pas d'I/O !
 
 @flow
 def my_pipeline():
     data = load_data()
-    result = my_task(data)  # Normal function call
+    result = my_task(data)  # Appel de fonction normal
 ```
 
-### Dagster - Code-First, Asset-Centric
+### Dagster - Déclaratif, Centré sur les Assets
 
-**Philosophy:** "I define the data assets I want to exist"
+**Philosophie :** "Je définis les assets de données que je veux qui existent"
 
-**The paradigm shift:**
+**Le changement de paradigme :**
 ```python
 @asset
 def customer_features(raw_data: pd.DataFrame) -> pd.DataFrame:
-    # Dagster infers dependency from parameter name!
+    # Dagster infère la dépendance depuis le nom du paramètre !
     return processed_df
 ```
 
 ---
 
-## Division of Responsibilities
+## Répartition des Responsabilités
 
-| Concern | Orchestrator | MLflow |
+| Préoccupation | Orchestrateur | MLflow |
 |---------|--------------|--------|
-| Retry on failure | X | |
-| Cache computations | X | |
-| Run tasks in parallel | X | |
-| Schedule pipelines | X | |
-| Log parameters | | X |
-| Log metrics | | X |
-| Store model artifacts | | X |
-| Version models | | X |
-| Serve models | | X |
+| Réessayer en cas d'échec | X | |
+| Cacher les calculs | X | |
+| Exécuter les tâches en parallèle | X | |
+| Planifier les pipelines | X | |
+| Logger les paramètres | | X |
+| Logger les métriques | | X |
+| Stocker les artefacts de modèles | | X |
+| Versionner les modèles | | X |
+| Servir les modèles | | X |
 
-**Key insight:** Orchestrators handle HOW your pipeline runs. MLflow handles WHAT gets tracked.
-
----
-
-## Workshop Flow
-
-### Part 1: MLflow Fundamentals (~60 min)
-1. Start with messy notebook - identify pain points
-2. Work through MLflow transition notebook
-3. Learn tracking, models, registry, serving
-
-### Part 2: Orchestration Patterns (~60 min)
-1. Work through Prefect Workshop Parts 1-5
-2. Learn retries, caching, parallelism, parameters
-3. Build a complete ML pipeline with MLflow
-
-### Part 3: Real Automation (~30 min)
-1. Deploy a scheduled flow (Part 6)
-2. Watch it run automatically
-3. See experiments appear in MLflow
-
-### Part 4: Dagster Bonus (~30 min)
-1. Explore asset-centric paradigm
-2. Enable schedules in UI
-3. Compare with Prefect approach
+**Point clé :** Les orchestrateurs gèrent COMMENT votre pipeline s'exécute. MLflow gère CE QUI est suivi.
 
 ---
 
-## Student Takeaways
+## Déroulement de l'Atelier
 
-### Technical Understanding:
-1. **MLflow Components:** Tracking, Models, Registry, Serving
-2. **Orchestration patterns:** Retries, caching, parallelism, parameters, schedules
-3. **Real automation:** Deploy flows, set schedules, watch them run
-4. **Design trade-offs:** Task-centric vs asset-centric
+### Configuration & Docker (~15 min)
+1. Démarrer la stack Docker, vérifier que les services sont sains
+2. Installer les dépendances Python
+3. Générer les données d'exemple
 
-### Practical Skills:
-- Build production ML pipelines with MLflow tracking
-- Implement orchestration patterns in Prefect
-- Deploy and schedule automated pipelines
-- Use Docker for ML infrastructure
+### Partie 1 : Fondamentaux MLflow (~45 min)
+1. Commencer avec le notebook désordonné - identifier les points de friction
+2. Travailler sur le notebook de transition MLflow
+3. Apprendre le tracking, les modèles, le registre, le serving
 
-### Resume/Interview Language:
-> "I've implemented ML pipelines using MLflow for experiment tracking and model registry, with Prefect for orchestration and scheduling. I can deploy automated retraining pipelines and understand the trade-offs between different orchestration approaches."
+### Partie 2 : Patterns d'Orchestration (~50 min)
+1. Travailler sur les Parties 1-5 de l'Atelier Prefect
+2. Apprendre les réessais, le cache, le parallélisme, les paramètres
+3. Construire un pipeline ML complet avec MLflow
+
+### Partie 3 : Automatisation Réelle (~20 min)
+1. Déployer un flow planifié (Partie 6)
+2. Le regarder s'exécuter automatiquement
+3. Voir les expérimentations apparaître dans MLflow
+
+### Partie 4 : Bonus Dagster (si le temps le permet, ~10 min)
+1. Explorer le paradigme centré sur les assets
+2. Activer les planifications dans l'interface
+3. Comparer avec l'approche Prefect
 
 ---
 
-## Additional Resources
+## Acquis des Étudiants
 
-- **MLflow Documentation:** https://mlflow.org/docs/latest/index.html
-- **Prefect Documentation:** https://docs.prefect.io/
-- **Dagster Documentation:** https://docs.dagster.io/
-- **Airflow Documentation:** https://airflow.apache.org/docs/
+### Compréhension Technique :
+1. **Composants MLflow :** Tracking, Modèles, Registre, Serving
+2. **Patterns d'orchestration :** Réessais, cache, parallélisme, paramètres, planifications
+3. **Automatisation réelle :** Déployer des flows, définir des planifications, les regarder s'exécuter
+4. **Compromis de conception :** Centré sur les tâches vs centré sur les assets
+
+### Compétences Pratiques :
+- Construire des pipelines ML de production avec tracking MLflow
+- Implémenter des patterns d'orchestration dans Prefect
+- Déployer et planifier des pipelines automatisés
+- Utiliser Docker pour l'infrastructure ML
+
+### Langage CV/Entretien :
+> "J'ai implémenté des pipelines ML en utilisant MLflow pour le suivi des expérimentations et le registre de modèles, avec Prefect pour l'orchestration et la planification. Je peux déployer des pipelines de réentraînement automatisés et je comprends les compromis entre les différentes approches d'orchestration."
+
+---
+
+## Ressources Supplémentaires
+
+- **Documentation MLflow :** https://mlflow.org/docs/latest/index.html
+- **Documentation Prefect :** https://docs.prefect.io/
+- **Documentation Dagster :** https://docs.dagster.io/
+- **Documentation Airflow :** https://airflow.apache.org/docs/

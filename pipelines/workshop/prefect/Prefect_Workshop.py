@@ -1,29 +1,29 @@
 # =============================================================================
-# Prefect Workshop - Orchestrating ML Workflows
+# Atelier Prefect - Orchestration de Workflows ML
 # =============================================================================
 #
-# This workshop teaches ORCHESTRATION through ML use cases.
+# Cet atelier enseigne l'ORCHESTRATION à travers des cas d'usage ML.
 #
-# SECTIONS:
-#   Part 1: Tasks & Flows - The basics
-#   Part 2: Resilience - Retries, error handling
-#   Part 3: Efficiency - Caching, parallel execution
-#   Part 4: Flexibility - Parameters, subflows
-#   Part 5: Full Pipeline - Everything with MLflow
-#   Part 6: AUTOMATION - Deploy, schedule, watch it run!
+# SECTIONS :
+#   Partie 1 : Tasks & Flows - Les bases
+#   Partie 2 : Résilience - Réessais, gestion d'erreurs
+#   Partie 3 : Efficacité - Cache, exécution parallèle
+#   Partie 4 : Flexibilité - Paramètres, sous-flows
+#   Partie 5 : Pipeline Complet - Tout avec MLflow
+#   Partie 6 : AUTOMATISATION - Déployer, planifier, regarder l'exécution !
 #
 # -----------------------------------------------------------------------------
-# SETUP
+# CONFIGURATION
 # -----------------------------------------------------------------------------
 #
-# 1. Start the orchestration stack:
+# 1. Démarrer la stack d'orchestration :
 #      docker-compose up -d
 #
-# 2. Access the UIs:
-#      - Prefect: http://localhost:4200 (flows, deployments, runs)
-#      - MLflow:  http://localhost:5000 (experiments, models)
+# 2. Accéder aux interfaces :
+#      - Prefect: http://localhost:4200 (flows, déploiements, exécutions)
+#      - MLflow:  http://localhost:5000 (expérimentations, modèles)
 #
-# 3. Run workshop parts:
+# 3. Exécuter les parties de l'atelier :
 #      python pipelines/workshop/prefect/Prefect_Workshop.py part1
 #      ...
 #      python pipelines/workshop/prefect/Prefect_Workshop.py deploy
@@ -49,7 +49,7 @@ import asyncio
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-# When running in Docker, these env vars are set by docker-compose
+# Lors de l'exécution dans Docker, ces variables d'environnement sont définies par docker-compose
 PROJECT_ROOT = os.getenv("PROJECT_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
@@ -62,35 +62,35 @@ FEATURE_COLS = [
 
 
 # =============================================================================
-# PART 1: TASKS & FLOWS - The Basics
+# PARTIE 1 : TASKS & FLOWS - Les Bases
 # =============================================================================
 #
-# ML PROBLEM:
-#   Your notebook runs cells sequentially. If cell 5 fails, you re-run
-#   everything. There's no structure, no visibility, no reusability.
+# PROBLÈME ML :
+#   Votre notebook exécute les cellules séquentiellement. Si la cellule 5 échoue,
+#   vous relancez tout. Il n'y a pas de structure, pas de visibilité, pas de réutilisabilité.
 #
-# ORCHESTRATION SOLUTION:
-#   Break your code into TASKS (single responsibilities) and FLOWS (pipelines).
-#   Each task is independent, logged, and can be retried.
+# SOLUTION D'ORCHESTRATION :
+#   Décomposer votre code en TASKS (responsabilités uniques) et FLOWS (pipelines).
+#   Chaque tâche est indépendante, loggée, et peut être réessayée.
 #
 # =============================================================================
 
 @task
 def load_data() -> pd.DataFrame:
     """
-    A TASK is a single unit of work.
+    Une TASK est une unité de travail unique.
 
-    Key points:
-    - @task decorator turns a function into an orchestrated task
-    - Return values flow to the next task (no file I/O needed!)
-    - Prefect automatically logs: start time, duration, success/failure
+    Points clés :
+    - Le décorateur @task transforme une fonction en tâche orchestrée
+    - Les valeurs de retour circulent vers la tâche suivante (pas besoin d'I/O fichier !)
+    - Prefect loggue automatiquement : heure de début, durée, succès/échec
     """
-    print("Loading customer data...")
+    print("Chargement des données clients...")
 
     if os.path.exists(DATA_PATH):
         df = pd.read_csv(DATA_PATH)
     else:
-        # Generate synthetic data
+        # Générer des données synthétiques
         np.random.seed(42)
         n = 1000
         df = pd.DataFrame({
@@ -106,14 +106,14 @@ def load_data() -> pd.DataFrame:
             'churned': np.random.binomial(1, 0.3, n)
         })
 
-    print(f"Loaded {len(df)} rows")
+    print(f"Chargé {len(df)} lignes")
     return df
 
 
 @task
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Feature engineering task."""
-    print("Engineering features...")
+    """Tâche de feature engineering."""
+    print("Ingénierie des features...")
     df = df.copy()
 
     df['recency_frequency_ratio'] = df['recency_days'] / (df['frequency'] + 1)
@@ -124,50 +124,50 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df['m_score'] = pd.qcut(df['monetary_value'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
     df['rfm_score'] = df['r_score'] + df['f_score'] + df['m_score']
 
-    print(f"Created {len(df.columns)} features")
+    print(f"Créé {len(df.columns)} features")
     return df
 
 
 @flow(name="basic-pipeline", log_prints=True)
 def basic_pipeline():
     """
-    A FLOW orchestrates tasks.
+    Un FLOW orchestre les tâches.
 
-    Call tasks like normal functions - data flows through return values.
+    Appelez les tâches comme des fonctions normales - les données circulent via les valeurs de retour.
     """
     raw_data = load_data()
     features = engineer_features(raw_data)
-    print(f"Pipeline complete! Shape: {features.shape}")
+    print(f"Pipeline terminé ! Forme : {features.shape}")
     return features
 
 
 # =============================================================================
-# PART 2: RESILIENCE - Handling Failures
+# PARTIE 2 : RÉSILIENCE - Gestion des Échecs
 # =============================================================================
 
 @task(retries=3, retry_delay_seconds=5)
 def load_from_unreliable_api() -> pd.DataFrame:
     """
-    RETRIES handle transient failures automatically.
+    Les RÉESSAIS gèrent les échecs transitoires automatiquement.
 
-    This task will:
-    1. Try to run
-    2. If it fails, wait 5 seconds
-    3. Try again (up to 3 times)
+    Cette tâche va :
+    1. Essayer de s'exécuter
+    2. Si elle échoue, attendre 5 secondes
+    3. Réessayer (à nouveau jusqu'à 3 fois)
     """
     if random.random() < 0.5:
         print("API call failed! (simulated)")
         raise ConnectionError("API temporarily unavailable")
 
-    print("API call succeeded!")
+    print("Appel API réussi !")
     return load_data()
 
 
 @task(retries=3, retry_delay_seconds=[10, 30, 60])
 def load_with_backoff() -> pd.DataFrame:
     """
-    EXPONENTIAL BACKOFF: Wait longer between each retry.
-    First failure: 10s, Second: 30s, Third: 60s
+    BACKOFF EXPONENTIEL : Attendre plus longtemps entre chaque réessai.
+    Premier échec : 10s, Deuxième : 30s, Troisième : 60s
     """
     if random.random() < 0.7:
         raise ConnectionError("Rate limited!")
@@ -175,56 +175,56 @@ def load_with_backoff() -> pd.DataFrame:
 
 
 # =============================================================================
-# PART 3: EFFICIENCY - Caching & Parallelism
+# PARTIE 3 : EFFICACITÉ - Cache & Parallélisme
 # =============================================================================
 
 @task(cache_key_fn=task_input_hash, cache_expiration=timedelta(hours=1))
 def expensive_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     """
-    CACHING: Skip recomputation if inputs haven't changed.
+    CACHE : Sauter le recalcul si les entrées n'ont pas changé.
     """
-    print("Running expensive feature engineering...")
-    time.sleep(2)  # Simulate expensive computation
+    print("Exécution du feature engineering coûteux...")
+    time.sleep(2)  # Simuler un calcul coûteux
     df = df.copy()
     df['expensive_feature'] = df['monetary_value'] * df['frequency']
-    print("Feature engineering complete!")
+    print("Feature engineering terminé !")
     return df
 
 
 @task
 def train_random_forest(X_train, y_train, X_test, y_test) -> dict:
-    """Train a Random Forest model."""
-    print("Training Random Forest...")
+    """Entraîner un modèle Random Forest."""
+    print("Entraînement Random Forest...")
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
     accuracy = accuracy_score(y_test, model.predict(X_test))
-    print(f"Random Forest accuracy: {accuracy:.4f}")
+    print(f"Précision Random Forest : {accuracy:.4f}")
     return {"name": "RandomForest", "model": model, "accuracy": accuracy}
 
 
 @task
 def train_gradient_boosting(X_train, y_train, X_test, y_test) -> dict:
-    """Train a Gradient Boosting model."""
-    print("Training Gradient Boosting...")
+    """Entraîner un modèle Gradient Boosting."""
+    print("Entraînement Gradient Boosting...")
     model = GradientBoostingClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
     accuracy = accuracy_score(y_test, model.predict(X_test))
-    print(f"Gradient Boosting accuracy: {accuracy:.4f}")
+    print(f"Précision Gradient Boosting : {accuracy:.4f}")
     return {"name": "GradientBoosting", "model": model, "accuracy": accuracy}
 
 
 @task
 def select_best_model(results: list) -> dict:
-    """Select the model with highest accuracy."""
+    """Sélectionner le modèle avec la meilleure précision."""
     best = max(results, key=lambda x: x["accuracy"])
-    print(f"Best model: {best['name']} with accuracy {best['accuracy']:.4f}")
+    print(f"Meilleur modèle : {best['name']} avec précision {best['accuracy']:.4f}")
     return best
 
 
 @flow(name="parallel-training", log_prints=True)
 def parallel_training_flow():
     """
-    PARALLEL EXECUTION: Train multiple models simultaneously.
+    EXÉCUTION PARALLÈLE : Entraîner plusieurs modèles simultanément.
     """
     df = load_data()
     df = engineer_features(df)
@@ -233,7 +233,7 @@ def parallel_training_flow():
     y = df['churned']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # These run in parallel - no dependency between them!
+    # Ceux-ci s'exécutent en parallèle - pas de dépendance entre eux !
     rf_result = train_random_forest(X_train, y_train, X_test, y_test)
     gb_result = train_gradient_boosting(X_train, y_train, X_test, y_test)
 
@@ -242,12 +242,12 @@ def parallel_training_flow():
 
 
 # =============================================================================
-# PART 4: FLEXIBILITY - Parameters & Subflows
+# PARTIE 4 : FLEXIBILITÉ - Paramètres & Sous-flows
 # =============================================================================
 
 @task
 def train_with_params(df: pd.DataFrame, n_estimators: int, max_depth: int) -> dict:
-    """Task that accepts hyperparameters."""
+    """Tâche qui accepte des hyperparamètres."""
     X = df[FEATURE_COLS + ['rfm_score']]
     y = df['churned']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -258,14 +258,14 @@ def train_with_params(df: pd.DataFrame, n_estimators: int, max_depth: int) -> di
     accuracy = accuracy_score(y_test, model.predict(X_test))
     f1 = f1_score(y_test, model.predict(X_test))
 
-    print(f"Model: n_estimators={n_estimators}, max_depth={max_depth}, accuracy={accuracy:.4f}")
+    print(f"Modèle : n_estimators={n_estimators}, max_depth={max_depth}, precision={accuracy:.4f}")
     return {"model": model, "params": {"n_estimators": n_estimators, "max_depth": max_depth}, "metrics": {"accuracy": accuracy, "f1": f1}}
 
 
 @flow(name="parameterized-training", log_prints=True)
 def parameterized_training_flow(n_estimators: int = 100, max_depth: int = 10):
     """
-    PARAMETERIZED FLOW: Configure without changing code.
+    FLOW PARAMÉTRÉ : Configurer sans changer le code.
     """
     df = load_data()
     df = engineer_features(df)
@@ -275,7 +275,7 @@ def parameterized_training_flow(n_estimators: int = 100, max_depth: int = 10):
 
 @flow(name="data-preparation", log_prints=True)
 def data_preparation_subflow() -> pd.DataFrame:
-    """SUBFLOW: Reusable data preparation."""
+    """SOUS-FLOW : Préparation de données réutilisable."""
     df = load_data()
     df = engineer_features(df)
     return df
@@ -283,33 +283,33 @@ def data_preparation_subflow() -> pd.DataFrame:
 
 @flow(name="training-subflow", log_prints=True)
 def training_subflow(df: pd.DataFrame, n_estimators: int = 100) -> dict:
-    """Training as a separate subflow."""
+    """Entraînement comme sous-flow séparé."""
     return train_with_params(df, n_estimators=n_estimators, max_depth=10)
 
 
 # =============================================================================
-# PART 5: FULL PIPELINE WITH MLFLOW
+# PARTIE 5 : PIPELINE COMPLET AVEC MLFLOW
 # =============================================================================
 
 @task(retries=3, retry_delay_seconds=5)
 def load_data_with_retry() -> pd.DataFrame:
-    """Data loading with retry logic."""
+    """Chargement de données avec logique de réessai."""
     return load_data()
 
 
 @task(cache_key_fn=task_input_hash, cache_expiration=timedelta(hours=1))
 def engineer_features_cached(df: pd.DataFrame) -> pd.DataFrame:
-    """Feature engineering with caching."""
+    """Feature engineering avec cache."""
     return engineer_features(df)
 
 
 @task
 def train_with_mlflow(df: pd.DataFrame, n_estimators: int, max_depth: int, experiment_name: str) -> dict:
     """
-    Training task with MLflow integration.
+    Tâche d'entraînement avec intégration MLflow.
 
-    Prefect handles: retries, caching, scheduling
-    MLflow handles: experiment tracking, model versioning
+    Prefect gère : réessais, cache, planification
+    MLflow gère : suivi des expérimentations, versionnage des modèles
     """
     feature_cols = FEATURE_COLS + ['rfm_score']
     X = df[feature_cols]
@@ -343,17 +343,17 @@ def train_with_mlflow(df: pd.DataFrame, n_estimators: int, max_depth: int, exper
 
 @task
 def register_model(run_id: str, model_name: str) -> str:
-    """Register model to MLflow registry."""
+    """Enregistrer le modèle dans le registre MLflow."""
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     model_uri = f"runs:/{run_id}/model"
     result = mlflow.register_model(model_uri, model_name)
-    print(f"Registered {model_name} version {result.version}")
+    print(f"Enregistré {model_name} version {result.version}")
     return result.version
 
 
 @task
 def generate_predictions(model, df: pd.DataFrame) -> pd.DataFrame:
-    """Generate predictions for all customers."""
+    """Générer des prédictions pour tous les clients."""
     feature_cols = FEATURE_COLS + ['rfm_score']
     X = df[feature_cols]
 
@@ -368,16 +368,16 @@ def generate_predictions(model, df: pd.DataFrame) -> pd.DataFrame:
     })
 
     high_risk = (probabilities > 0.7).sum()
-    print(f"Generated {len(result)} predictions ({high_risk} high-risk)")
+    print(f"Généré {len(result)} prédictions ({high_risk} à haut risque)")
     return result
 
 
 @task
 def save_predictions(predictions: pd.DataFrame, output_path: str) -> str:
-    """Save predictions to CSV."""
+    """Sauvegarder les prédictions en CSV."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     predictions.to_csv(output_path, index=False)
-    print(f"Saved to {output_path}")
+    print(f"Sauvegardé dans {output_path}")
     return output_path
 
 
@@ -389,96 +389,96 @@ def production_pipeline(
     model_name: str = "churn-predictor"
 ):
     """
-    PRODUCTION ML PIPELINE
+    PIPELINE ML DE PRODUCTION
 
-    Combines all patterns:
-    - RETRIES on data loading
-    - CACHING on feature engineering
-    - PARAMETERS for hyperparameters
-    - MLFLOW for tracking
+    Combine tous les patterns :
+    - RÉESSAIS sur le chargement de données
+    - CACHE sur le feature engineering
+    - PARAMÈTRES pour les hyperparamètres
+    - MLFLOW pour le suivi
 
-    This flow can be:
-    - Run manually: production_pipeline()
-    - Deployed with schedule: See Part 6
+    Ce flow peut être :
+    - Exécuté manuellement : production_pipeline()
+    - Déployé avec planification : Voir Partie 6
     """
     print("=" * 60)
-    print("CHURN PREDICTION PIPELINE")
-    print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("PIPELINE DE PRÉDICTION DE CHURN")
+    print(f"Heure : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
-    # Data
+    # Données
     df = load_data_with_retry()
     df = engineer_features_cached(df)
 
-    # Training
+    # Entraînement
     result = train_with_mlflow(df, n_estimators, max_depth, experiment_name)
 
-    # Registration
+    # Enregistrement
     version = register_model(result["run_id"], model_name)
 
-    # Inference
+    # Inférence
     predictions = generate_predictions(result["model"], df)
     output_path = os.path.join(PROJECT_ROOT, "data", "predictions_workshop.csv")
     save_predictions(predictions, output_path)
 
     print("\n" + "=" * 60)
-    print("PIPELINE COMPLETE")
+    print("PIPELINE TERMINÉ")
     print("=" * 60)
-    print(f"Model: {model_name} v{version}")
-    print(f"Accuracy: {result['metrics']['accuracy']:.4f}")
-    print(f"Predictions: {len(predictions)}")
+    print(f"Modèle : {model_name} v{version}")
+    print(f"Précision : {result['metrics']['accuracy']:.4f}")
+    print(f"Prédictions : {len(predictions)}")
 
     return {"model_version": version, "metrics": result["metrics"], "predictions_count": len(predictions)}
 
 
 # =============================================================================
-# PART 6: AUTOMATION - Deploy & Schedule
+# PARTIE 6 : AUTOMATISATION - Déployer & Planifier
 # =============================================================================
 #
-# This is where ORCHESTRATION becomes real automation!
+# C'est ici que l'ORCHESTRATION devient une vraie automatisation !
 #
-# Until now, we ran flows manually. In production:
-# - Flows run on SCHEDULES (daily retraining, hourly predictions)
-# - A WORKER executes the flows (in Docker)
-# - You MONITOR in the UI (see runs, failures, logs)
+# Jusqu'à présent, nous avons exécuté les flows manuellement. En production :
+# - Les flows s'exécutent selon des PLANIFICATIONS (réentraînement quotidien, prédictions horaires)
+# - Un WORKER exécute les flows (dans Docker)
+# - Vous SURVEILLEZ dans l'interface (voir les exécutions, échecs, logs)
 #
 # =============================================================================
 
 def deploy_with_schedule():
     """
-    DEPLOY the pipeline with a schedule.
+    DÉPLOYER le pipeline avec une planification.
 
-    This creates a DEPLOYMENT:
-    - Registers the flow with Prefect server
-    - Sets up a schedule (every 2 minutes for demo)
-    - Worker picks it up and executes it
+    Ceci crée un DÉPLOIEMENT :
+    - Enregistre le flow auprès du serveur Prefect
+    - Configure une planification (toutes les 2 minutes pour la démo)
+    - Le Worker le récupère et l'exécute
 
-    After running this:
-    1. Open Prefect UI: http://localhost:4200
-    2. Go to Deployments
-    3. See "churn-prediction-pipeline/scheduled-training"
-    4. Watch runs appear every 2 minutes!
-    5. Check MLflow UI: http://localhost:5000 for new experiments
+    Après avoir exécuté ceci :
+    1. Ouvrir l'interface Prefect : http://localhost:4200
+    2. Aller dans Déploiements
+    3. Voir "churn-prediction-pipeline/scheduled-training"
+    4. Observer les exécutions apparaître toutes les 2 minutes !
+    5. Vérifier l'interface MLflow : http://localhost:5000 pour les nouvelles expérimentations
     """
     print("=" * 60)
-    print("DEPLOYING PIPELINE WITH SCHEDULE")
+    print("DÉPLOIEMENT DU PIPELINE AVEC PLANIFICATION")
     print("=" * 60)
-    print("\nThis will:")
-    print("1. Register the flow with Prefect server")
-    print("2. Set up a schedule (every 2 minutes)")
-    print("3. Worker will automatically execute it")
-    print("\nAfter deployment:")
-    print(f"  - Prefect UI: http://localhost:4200")
-    print(f"  - MLflow UI:  {MLFLOW_TRACKING_URI}")
+    print("\nCeci va :")
+    print("1. Enregistrer le flow auprès du serveur Prefect")
+    print("2. Configurer une planification (toutes les 2 minutes)")
+    print("3. Le Worker l'exécutera automatiquement")
+    print("\nAprès le déploiement :")
+    print(f"  - Interface Prefect: http://localhost:4200")
+    print(f"  - Interface MLflow:  {MLFLOW_TRACKING_URI}")
     print("=" * 60)
 
-    # Deploy using serve() - this runs the scheduler locally
-    # In production, you'd use flow.deploy() with a work pool
+    # Déployer en utilisant serve() - ceci exécute le planificateur localement
+    # En production, vous utiliseriez flow.deploy() avec un work pool
     production_pipeline.serve(
         name="scheduled-training",
-        cron="*/2 * * * *",  # Every 2 minutes (for demo)
+        cron="*/2 * * * *",  # Toutes les 2 minutes (pour la démo)
         tags=["workshop", "ml", "churn"],
-        description="Automated churn model retraining - runs every 2 minutes",
+        description="Réentraînement automatisé du modèle de churn - s'exécute toutes les 2 minutes",
         parameters={
             "n_estimators": 100,
             "max_depth": 10,
@@ -489,8 +489,8 @@ def deploy_with_schedule():
 
 
 def run_single():
-    """Run the pipeline once (for testing before deployment)."""
-    print("Running pipeline once...")
+    """Exécuter le pipeline une fois (pour tester avant le déploiement)."""
+    print("Exécution du pipeline une fois...")
     result = production_pipeline(
         n_estimators=100,
         max_depth=10,
@@ -533,63 +533,63 @@ if __name__ == "__main__":
             print(f"Failed after retries: {e}")
 
     elif mode == "part3":
-        print("\nPART 3: Efficiency (Caching & Parallelism)")
+        print("\nPARTIE 3 : Efficacité (Cache & Parallélisme)")
         print("-" * 40)
         result = parallel_training_flow()
 
     elif mode == "part4":
-        print("\nPART 4: Flexibility (Parameters & Subflows)")
+        print("\nPARTIE 4 : Flexibilité (Paramètres & Sous-flows)")
         print("-" * 40)
         result = parameterized_training_flow(n_estimators=50)
 
     elif mode == "part5" or mode == "full":
-        print("\nPART 5: Full Pipeline with MLflow")
+        print("\nPARTIE 5 : Pipeline Complet avec MLflow")
         print("-" * 40)
         result = run_single()
 
     elif mode == "deploy":
-        print("\nPART 6: Deploy with Schedule (AUTOMATION!)")
+        print("\nPARTIE 6 : Déployer avec Planification (AUTOMATISATION !)")
         print("-" * 40)
-        print("\nThis will start a long-running process that:")
-        print("1. Registers the flow")
-        print("2. Runs it every 2 minutes")
-        print("3. Logs to MLflow")
-        print("\nPress Ctrl+C to stop.\n")
+        print("\nCeci va démarrer un processus de longue durée qui :")
+        print("1. Enregistre le flow")
+        print("2. L'exécute toutes les 2 minutes")
+        print("3. Loggue dans MLflow")
+        print("\nAppuyez sur Ctrl+C pour arrêter.\n")
         deploy_with_schedule()
 
     else:
         print("""
-PREFECT WORKSHOP - ML Orchestration
+ATELIER PREFECT - Orchestration ML
 ====================================
 
-SETUP:
+CONFIGURATION :
   docker-compose up -d
 
-  UIs:
+  Interfaces :
     Prefect: http://localhost:4200
     MLflow:  http://localhost:5000
 
-MODES:
-  part1    Tasks & Flows (basics)
-  part2    Resilience (retries)
-  part3    Efficiency (caching, parallelism)
-  part4    Flexibility (parameters, subflows)
-  part5    Full Pipeline with MLflow
-  deploy   AUTOMATION - Deploy with schedule!
+MODES :
+  part1    Tasks & Flows (bases)
+  part2    Résilience (réessais)
+  part3    Efficacité (cache, parallélisme)
+  part4    Flexibilité (paramètres, sous-flows)
+  part5    Pipeline Complet avec MLflow
+  deploy   AUTOMATISATION - Déployer avec planification !
 
-WORKSHOP FLOW:
-  1. Run part1-part5 to learn patterns
-  2. Run 'deploy' to see real automation
-  3. Open Prefect UI to watch runs
-  4. Open MLflow UI to see experiments
+DÉROULEMENT DE L'ATELIER :
+  1. Exécuter part1-part5 pour apprendre les patterns
+  2. Exécuter 'deploy' pour voir l'automatisation réelle
+  3. Ouvrir l'interface Prefect pour observer les exécutions
+  4. Ouvrir l'interface MLflow pour voir les expérimentations
 
-AUTOMATION (deploy mode):
-  - Deploys flow to Prefect
-  - Schedules to run every 2 minutes
-  - Watch in Prefect UI: Deployments > Runs
-  - Watch in MLflow UI: new experiments appear!
+AUTOMATISATION (mode deploy) :
+  - Déploie le flow vers Prefect
+  - Planifie l'exécution toutes les 2 minutes
+  - Observer dans l'interface Prefect : Déploiements > Exécutions
+  - Observer dans l'interface MLflow : de nouvelles expérimentations apparaissent !
 
-Example:
+Exemple :
   python Prefect_Workshop.py part1
   python Prefect_Workshop.py deploy
 """)

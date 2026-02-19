@@ -1,27 +1,27 @@
 # =============================================================================
-# MLflow + Orchestrators Workshop - Docker Compose
+# Atelier MLflow + Orchestrateurs - Docker Compose
 # =============================================================================
 #
-# This runs the full orchestration stack:
-#   - MLflow: Experiment tracking and model registry
-#   - Prefect: Server + Worker for flow automation
-#   - Dagster: Webserver + Daemon for asset automation (bonus)
+# Ceci exécute la stack complète d'orchestration :
+#   - MLflow: Suivi d'expérimentations et registre de modèles
+#   - Prefect: Serveur + Worker pour l'automatisation des flows
+#   - Dagster: Webserver + Daemon pour l'automatisation des assets (bonus)
 #
-# Usage:
-#   docker-compose up -d                     # MLflow + Prefect (main workshop)
+# Utilisation :
+#   docker-compose up -d                     # MLflow + Prefect (atelier principal)
 #   docker-compose --profile dagster up -d   # + Dagster (bonus)
-#   docker-compose down                      # Stop all
+#   docker-compose down                      # Tout arrêter
 #
-# Access:
-#   - MLflow:  http://localhost:5000 (experiments, models)
-#   - Prefect: http://localhost:4200 (flows, deployments, runs)
-#   - Dagster: http://localhost:3000 (assets, materializations)
+# Accès :
+#   - MLflow:  http://localhost:5000 (expérimentations, modèles)
+#   - Prefect: http://localhost:4200 (flows, déploiements, exécutions)
+#   - Dagster: http://localhost:3000 (assets, matérialisations)
 #
 # =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
-  # MLflow Tracking Server
+  # Serveur de Tracking MLflow
   # ---------------------------------------------------------------------------
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.9.0
@@ -45,7 +45,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Prefect Server (API + UI)
+  # Serveur Prefect (API + Interface)
   # ---------------------------------------------------------------------------
   prefect-server:
     image: prefecthq/prefect:2-python3.11
@@ -67,7 +67,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Prefect Worker (executes flows)
+  # Worker Prefect (exécute les flows)
   # ---------------------------------------------------------------------------
   prefect-worker:
     build:
@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Dagster Webserver (UI) - BONUS
+  # Serveur Web Dagster (Interface) - BONUS
   # ---------------------------------------------------------------------------
   dagster-webserver:
     build:
@@ -114,7 +114,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Dagster Daemon (executes schedules) - BONUS
+  # Daemon Dagster (exécute les planifications) - BONUS
   # ---------------------------------------------------------------------------
   dagster-daemon:
     build:

@@ -1,11 +1,11 @@
 # =============================================================================
-# Dagster Workshop Image
+# Image Atelier Dagster
 # =============================================================================
 #
-# Base image for Dagster webserver and daemon.
-# docker-compose runs two containers from this image:
-#   - dagster-webserver: UI at :3000
-#   - dagster-daemon: Executes schedules
+# Image de base pour le serveur web et le daemon Dagster.
+# docker-compose exécute deux conteneurs depuis cette image :
+#   - dagster-webserver: Interface à :3000
+#   - dagster-daemon: Exécute les planifications
 #
 # Build: docker-compose --profile dagster build
 # Run:   docker-compose --profile dagster up -d
@@ -16,7 +16,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Installer les dépendances
 RUN pip install --no-cache-dir \
     dagster \
     dagster-webserver \
@@ -26,20 +26,20 @@ RUN pip install --no-cache-dir \
     scikit-learn \
     pyarrow
 
-# Create dagster home and workspace config
+# Créer le répertoire dagster home et la configuration workspace
 RUN mkdir -p /app/dagster_home
 
-# Create workspace.yaml pointing to the workshop
+# Créer workspace.yaml pointant vers l'atelier
 RUN echo 'load_from:\n  - python_file:\n      relative_path: pipelines/workshop/dagster/Dagster_Workshop.py\n      working_directory: /app' > /app/dagster_home/workspace.yaml
 
-# Create dagster.yaml config
+# Créer la configuration dagster.yaml
 RUN echo 'run_coordinator:\n  module: dagster.core.run_coordinator\n  class: QueuedRunCoordinator' > /app/dagster_home/dagster.yaml
 
 ENV DAGSTER_HOME=/app/dagster_home
 
-# Copy pipeline code (also mounted as volume)
+# Copier le code des pipelines (également monté comme volume)
 COPY pipelines/ /app/pipelines/
 
 EXPOSE 3000
 
-# Command specified in docker-compose.yml (webserver or daemon)
+# Commande spécifiée dans docker-compose.yml (webserver ou daemon)

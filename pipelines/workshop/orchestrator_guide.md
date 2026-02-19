@@ -1,141 +1,141 @@
-# Orchestrating ML Workflows: A Practical Guide
+# Orchestration des Workflows ML : Guide Pratique
 
-## Table of Contents
+## Table des Matières
 
-1. [Why Orchestrators?](#1-why-orchestrators)
-2. [The Three Orchestrators](#2-the-three-orchestrators)
-3. [Orchestration Patterns for ML](#3-orchestration-patterns-for-ml)
-4. [Where MLflow Fits](#4-where-mlflow-fits)
-5. [Workshop Structure](#5-workshop-structure)
-6. [Running the Workshops](#6-running-the-workshops)
-7. [Quick Reference](#7-quick-reference)
+1. [Pourquoi des Orchestrateurs ?](#1-pourquoi-des-orchestrateurs-)
+2. [Les Trois Orchestrateurs](#2-les-trois-orchestrateurs)
+3. [Patterns d'Orchestration pour le ML](#3-patterns-dorchestration-pour-le-ml)
+4. [Où MLflow S'Intègre](#4-où-mlflow-sintègre)
+5. [Structure de l'Atelier](#5-structure-de-latelier)
+6. [Exécuter les Ateliers](#6-exécuter-les-ateliers)
+7. [Référence Rapide](#7-référence-rapide)
 
 ---
 
-## 1. Why Orchestrators?
+## 1. Pourquoi des Orchestrateurs ?
 
-### The Problem with Notebooks
+### Le Problème avec les Notebooks
 
-You've built a great ML model in a notebook. Now what?
+Vous avez construit un excellent modèle ML dans un notebook. Et maintenant ?
 
 ```
-Your current workflow:
+Votre workflow actuel :
 ────────────────────────────────────────────────────────────────
-Monday:     Run notebook manually, model trained
-Tuesday:    Forgot to run it
-Wednesday:  "Why is the model stale?"
-Thursday:   Run it, API fails at cell 5, re-run everything
-Friday:     Manager: "Why isn't this automated?"
+Lundi :      Exécuter le notebook manuellement, modèle entraîné
+Mardi :      Oublié de l'exécuter
+Mercredi :   "Pourquoi le modèle est obsolète ?"
+Jeudi :      L'exécuter, l'API échoue à la cellule 5, tout relancer
+Vendredi :   Manager : "Pourquoi ce n'est pas automatisé ?"
 ```
 
-### What Orchestrators Solve
+### Ce que les Orchestrateurs Résolvent
 
-| ML Problem | Orchestration Solution |
+| Problème ML | Solution d'Orchestration |
 |------------|------------------------|
-| API fails randomly | **Retries** with backoff |
-| Feature engineering is slow | **Caching** - skip if unchanged |
-| Comparing 5 models takes 5x time | **Parallel execution** |
-| Different hyperparameters = code changes | **Parameters** - configure at runtime |
-| Training and inference share code | **Subflows** - compose pipelines |
-| No visibility into pipeline state | **Monitoring** - logs, UI, alerts |
+| L'API échoue aléatoirement | **Réessais** avec backoff |
+| Le feature engineering est lent | **Cache** - sauter si inchangé |
+| Comparer 5 modèles prend 5x plus de temps | **Exécution parallèle** |
+| Différents hyperparamètres = changements de code | **Paramètres** - configurer à l'exécution |
+| Entraînement et inférence partagent du code | **Sous-flows** - composer les pipelines |
+| Pas de visibilité sur l'état du pipeline | **Monitoring** - logs, UI, alertes |
 
-### The Orchestrator's Job
+### Le Rôle de l'Orchestrateur
 
 ```
-                    ORCHESTRATOR
+                    ORCHESTRATEUR
     ┌──────────────────────────────────────────────────┐
     │                                                  │
     │   ┌──────┐    ┌──────┐    ┌──────┐    ┌──────┐  │
-    │   │ Load │ →  │ Feat │ →  │Train │ →  │ Reg  │  │
-    │   │ Data │    │ Eng  │    │Model │    │ Model│  │
+    │   │Charger│ → │ Feat │ →  │Entraîner│→│ Enreg│  │
+    │   │Données│   │ Eng  │    │ Modèle │ │Modèle│  │
     │   └──────┘    └──────┘    └──────┘    └──────┘  │
     │      │           │           │           │      │
-    │   Retry?      Cache?      Track?      Version?  │
-    │   3 times     1 hour      MLflow      Registry  │
+    │   Réessai?    Cache?      Track?      Version?  │
+    │   3 fois      1 heure     MLflow      Registre  │
     │                                                  │
     └──────────────────────────────────────────────────┘
                           │
               ┌───────────┴───────────┐
               │                       │
          Prefect:                MLflow:
-         - Retries               - Experiments
-         - Caching               - Metrics
-         - Scheduling            - Model versions
-         - Monitoring            - Artifacts
+         - Réessais              - Expérimentations
+         - Cache                 - Métriques
+         - Planification         - Versions de modèles
+         - Monitoring            - Artefacts
 ```
 
-**Key insight**: Orchestrators handle HOW your pipeline runs. MLflow handles WHAT gets tracked.
+**Point clé** : Les orchestrateurs gèrent COMMENT votre pipeline s'exécute. MLflow gère CE QUI est suivi.
 
 ---
 
-## 2. The Three Orchestrators
+## 2. Les Trois Orchestrateurs
 
-### Overview
+### Vue d'Ensemble
 
-| Tool | Philosophy | Best For |
+| Outil | Philosophie | Idéal Pour |
 |------|------------|----------|
-| **Airflow** | "Configure everything explicitly" | Enterprise, existing infra |
-| **Prefect** | "Just write Python" | Python teams, quick start |
-| **Dagster** | "Think about data, not tasks" | Data platforms, lineage |
+| **Airflow** | "Tout configurer explicitement" | Enterprise, infra existante |
+| **Prefect** | "Juste écrire du Python" | Équipes Python, démarrage rapide |
+| **Dagster** | "Penser aux données, pas aux tâches" | Plateformes data, lignage |
 
-### Airflow: Industry Standard
+### Airflow : Standard de l'Industrie
 
-- Created by Airbnb (2014)
-- Battle-tested at massive scale
-- Rich ecosystem (Spark, databases, cloud)
+- Créé par Airbnb (2014)
+- Testé au combat à grande échelle
+- Écosystème riche (Spark, bases de données, cloud)
 
-**Pain points for ML:**
-- XCom can't handle DataFrames (48KB limit)
-- Must save/load files between tasks
-- Manual cleanup of temp files
-- Heavy configuration before any logic
+**Points de friction pour le ML :**
+- XCom ne peut pas gérer les DataFrames (limite de 48KB)
+- Doit sauvegarder/charger des fichiers entre les tâches
+- Nettoyage manuel des fichiers temporaires
+- Configuration lourde avant toute logique
 
-### Prefect: Pythonic Approach
+### Prefect : Approche Pythonique
 
-- Created 2018 as Python-native alternative
-- Decorators on regular functions
-- Return values = data flow
-- Minimal infrastructure
+- Créé en 2018 comme alternative native Python
+- Décorateurs sur des fonctions normales
+- Valeurs de retour = flux de données
+- Infrastructure minimale
 
-**Key advantage**: Feels like writing normal Python.
+**Avantage clé** : Ressemble à l'écriture de Python normal.
 
-### Dagster: Asset-Centric
+### Dagster : Centré sur les Assets
 
-- Created 2018, focus on "data assets"
-- Dependencies inferred from function parameters
-- Built-in data lineage graph
-- Re-run only what changed
+- Créé en 2018, focus sur les "assets de données"
+- Dépendances inférées depuis les paramètres de fonction
+- Graphe de lignage de données intégré
+- Ré-exécuter seulement ce qui a changé
 
-**Key advantage**: Think "what data exists" not "what tasks run".
+**Avantage clé** : Penser "quelles données existent" et non "quelles tâches s'exécutent".
 
 ---
 
-## 3. Orchestration Patterns for ML
+## 3. Patterns d'Orchestration pour le ML
 
-These patterns solve real ML problems. Each is covered in the Prefect workshop.
+Ces patterns résolvent de vrais problèmes ML. Chacun est couvert dans l'atelier Prefect.
 
-### Pattern 1: Resilience (Retries)
+### Pattern 1 : Résilience (Réessais)
 
-**ML Problem**: Data APIs fail randomly - rate limits, timeouts, network issues.
+**Problème ML** : Les APIs de données échouent aléatoirement - limites de débit, timeouts, problèmes réseau.
 
 ```python
-# Your overnight job fails at 3 AM. You find out at 9 AM.
+# Votre job nocturne échoue à 3h du matin. Vous le découvrez à 9h.
 
 @task(retries=3, retry_delay_seconds=60)
 def load_from_api() -> pd.DataFrame:
-    """Automatically retry on failure."""
+    """Réessayer automatiquement en cas d'échec."""
     return requests.get(API_URL).json()
 
-# Exponential backoff for rate limits
+# Backoff exponentiel pour les limites de débit
 @task(retries=3, retry_delay_seconds=[10, 30, 60])
 def load_with_backoff() -> pd.DataFrame:
-    """Wait longer between each retry: 10s, 30s, 60s."""
+    """Attendre plus longtemps entre chaque réessai : 10s, 30s, 60s."""
     ...
 ```
 
-### Pattern 2: Efficiency (Caching)
+### Pattern 2 : Efficacité (Cache)
 
-**ML Problem**: Feature engineering takes 30 minutes. Pipeline fails at training. Now you re-run feature engineering again.
+**Problème ML** : Le feature engineering prend 30 minutes. Le pipeline échoue à l'entraînement. Maintenant vous ré-exécutez le feature engineering à nouveau.
 
 ```python
 from prefect.tasks import task_input_hash
@@ -146,35 +146,35 @@ from datetime import timedelta
     cache_expiration=timedelta(hours=1)
 )
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Skip if same input seen in last hour."""
-    # Expensive computation here...
+    """Sauter si la même entrée a été vue dans la dernière heure."""
+    # Calcul coûteux ici...
     return df
 ```
 
-### Pattern 3: Efficiency (Parallelism)
+### Pattern 3 : Efficacité (Parallélisme)
 
-**ML Problem**: Comparing 5 models but running them sequentially = 5x slower.
+**Problème ML** : Comparer 5 modèles mais les exécuter séquentiellement = 5x plus lent.
 
 ```python
 @flow
 def compare_models():
-    # Data prep (sequential)
+    # Préparation des données (séquentiel)
     df = load_data()
     X_train, X_test, y_train, y_test = split(df)
 
-    # Training (parallel - no dependencies between these!)
+    # Entraînement (parallèle - pas de dépendances entre ceux-ci !)
     rf_result = train_random_forest(X_train, y_train, X_test, y_test)
     gb_result = train_gradient_boosting(X_train, y_train, X_test, y_test)
     xgb_result = train_xgboost(X_train, y_train, X_test, y_test)
 
-    # Selection (waits for all above)
+    # Sélection (attend tous les résultats ci-dessus)
     best = select_best([rf_result, gb_result, xgb_result])
     return best
 ```
 
-### Pattern 4: Flexibility (Parameters)
+### Pattern 4 : Flexibilité (Paramètres)
 
-**ML Problem**: Different hyperparameters = changing code every time.
+**Problème ML** : Différents hyperparamètres = changer le code à chaque fois.
 
 ```python
 @flow
@@ -183,36 +183,36 @@ def training_flow(
     max_depth: int = 10,
     experiment_name: str = "default"
 ):
-    """Configure without changing code."""
+    """Configurer sans changer le code."""
     ...
 
-# Usage:
-training_flow()  # Use defaults
-training_flow(n_estimators=200)  # Override one
-training_flow(n_estimators=50, max_depth=5)  # Override multiple
+# Utilisation :
+training_flow()  # Utiliser les valeurs par défaut
+training_flow(n_estimators=200)  # Remplacer une valeur
+training_flow(n_estimators=50, max_depth=5)  # Remplacer plusieurs valeurs
 ```
 
-### Pattern 5: Flexibility (Subflows)
+### Pattern 5 : Flexibilité (Sous-flows)
 
-**ML Problem**: Training and inference are separate but share data prep logic.
+**Problème ML** : L'entraînement et l'inférence sont séparés mais partagent la logique de préparation des données.
 
 ```python
 @flow
 def data_preparation() -> pd.DataFrame:
-    """Reusable data prep."""
+    """Préparation de données réutilisable."""
     df = load_data()
     df = engineer_features(df)
     return df
 
 @flow
 def training_pipeline():
-    df = data_preparation()  # Reuse!
+    df = data_preparation()  # Réutiliser !
     model = train(df)
     register(model)
 
 @flow
 def inference_pipeline():
-    df = data_preparation()  # Reuse!
+    df = data_preparation()  # Réutiliser !
     model = load_from_registry()
     predictions = predict(model, df)
     save(predictions)
@@ -220,36 +220,36 @@ def inference_pipeline():
 
 ---
 
-## 4. Where MLflow Fits
+## 4. Où MLflow S'Intègre
 
-### Division of Responsibilities
+### Répartition des Responsabilités
 
-| Concern | Orchestrator (Prefect) | Tracker (MLflow) |
+| Préoccupation | Orchestrateur (Prefect) | Tracker (MLflow) |
 |---------|------------------------|------------------|
-| Retry on failure | ✅ | |
-| Cache computations | ✅ | |
-| Run tasks in parallel | ✅ | |
-| Schedule pipelines | ✅ | |
-| Log parameters | | ✅ |
-| Log metrics | | ✅ |
-| Store model artifacts | | ✅ |
-| Version models | | ✅ |
-| Serve models | | ✅ |
+| Réessayer en cas d'échec | ✅ | |
+| Cacher les calculs | ✅ | |
+| Exécuter les tâches en parallèle | ✅ | |
+| Planifier les pipelines | ✅ | |
+| Logger les paramètres | | ✅ |
+| Logger les métriques | | ✅ |
+| Stocker les artefacts de modèles | | ✅ |
+| Versionner les modèles | | ✅ |
+| Servir les modèles | | ✅ |
 
-### Integration Point: The Training Task
+### Point d'Intégration : La Tâche d'Entraînement
 
 ```python
 @task(retries=2, cache_expiration=timedelta(hours=1))
 def train_model(df: pd.DataFrame, n_estimators: int) -> dict:
     """
-    Prefect handles:
-    - Retrying if training fails
-    - Caching if same data/params
+    Prefect gère :
+    - Réessayer si l'entraînement échoue
+    - Cacher si mêmes données/paramètres
 
-    MLflow handles:
-    - Tracking the experiment
-    - Storing the model
-    - Versioning
+    MLflow gère :
+    - Suivre l'expérimentation
+    - Stocker le modèle
+    - Versionner
     """
     mlflow.set_tracking_uri("http://localhost:5000")
     mlflow.set_experiment("churn-prediction")
@@ -266,164 +266,164 @@ def train_model(df: pd.DataFrame, n_estimators: int) -> dict:
         return {"model": model, "run_id": mlflow.active_run().info.run_id}
 ```
 
-### Best Practices
+### Bonnes Pratiques
 
-| Practice | Why |
+| Pratique | Pourquoi |
 |----------|-----|
-| Separate train/inference flows | Different schedules, different failure modes |
-| Load models from registry | `models:/name/latest` not `runs:/id/model` |
-| Log `orchestrator` as param | Know which tool ran this experiment |
-| Register after validation | Only register models that meet quality bar |
+| Séparer les flows train/inference | Planifications différentes, modes d'échec différents |
+| Charger les modèles depuis le registre | `models:/name/latest` et non `runs:/id/model` |
+| Logger `orchestrator` comme param | Savoir quel outil a exécuté cette expérimentation |
+| Enregistrer après validation | N'enregistrer que les modèles qui passent le seuil de qualité |
 
 ---
 
-## 5. Workshop Structure
+## 5. Structure de l'Atelier
 
-### Prefect Workshop (Main Focus)
+### Atelier Prefect (Focus Principal)
 
-Located in `prefect/Prefect_Workshop.py`
+Situé dans `prefect/Prefect_Workshop.py`
 
-| Part | Orchestration Pattern | ML Problem Solved |
+| Partie | Pattern d'Orchestration | Problème ML Résolu |
 |------|----------------------|-------------------|
-| Part 1 | Tasks & Flows | Notebook chaos → structured pipeline |
-| Part 2 | Retries, Backoff | API failures, rate limits |
-| Part 3 | Caching, Parallelism | Expensive features, slow model comparison |
-| Part 4 | Parameters, Subflows | Hyperparameter tuning, reusable components |
-| Part 5 | Full Pipeline | All patterns + MLflow integration |
+| Partie 1 | Tasks & Flows | Chaos des notebooks → pipeline structuré |
+| Partie 2 | Réessais, Backoff | Échecs d'API, limites de débit |
+| Partie 3 | Cache, Parallélisme | Features coûteuses, comparaison lente de modèles |
+| Partie 4 | Paramètres, Sous-flows | Tuning d'hyperparamètres, composants réutilisables |
+| Partie 5 | Pipeline Complet | Tous les patterns + intégration MLflow |
 
-### Airflow Overview (Guided Reading)
+### Vue d'Ensemble Airflow (Lecture Guidée)
 
-Located in `airflow/airflow_overview.md`
+Situé dans `airflow/airflow_overview.md`
 
-- Why Airflow exists (industry standard)
-- Pain points for ML (XCom limits, file I/O)
-- Reference: `pipelines/examples/Airflow_ML_Pipeline.py`
+- Pourquoi Airflow existe (standard de l'industrie)
+- Points de friction pour le ML (limites XCom, I/O fichiers)
+- Référence : `pipelines/examples/Airflow_ML_Pipeline.py`
 
-### Dagster Workshop (Bonus)
+### Atelier Dagster (Bonus)
 
-Located in `dagster/Dagster_Workshop.py`
+Situé dans `dagster/Dagster_Workshop.py`
 
-- Transform your Prefect pipeline to Dagster assets
-- Learn asset-centric thinking
-- Use the Dagster UI for visualization
+- Transformer votre pipeline Prefect en assets Dagster
+- Apprendre la pensée centrée sur les assets
+- Utiliser l'interface Dagster pour la visualisation
 
 ---
 
-## 6. Running the Workshops
+## 6. Exécuter les Ateliers
 
-### Prerequisites
+### Prérequis
 
 ```bash
-# 1. Start MLflow server
+# 1. Démarrer le serveur MLflow
 docker-compose up -d
 
-# 2. Install dependencies
+# 2. Installer les dépendances
 pip install prefect dagster dagster-webserver mlflow scikit-learn pandas
 
-# 3. Generate sample data
+# 3. Générer les données d'exemple
 python generate_sample_data.py
 ```
 
-### Prefect Workshop
+### Atelier Prefect
 
 ```bash
-# Part 1: Tasks & Flows
+# Partie 1 : Tasks & Flows
 python pipelines/workshop/prefect/Prefect_Workshop.py part1
 
-# Part 2: Resilience (Retries)
+# Partie 2 : Résilience (Réessais)
 python pipelines/workshop/prefect/Prefect_Workshop.py part2
 
-# Part 3: Efficiency (Caching, Parallel)
+# Partie 3 : Efficacité (Cache, Parallèle)
 python pipelines/workshop/prefect/Prefect_Workshop.py part3
 
-# Part 4: Flexibility (Parameters, Subflows)
+# Partie 4 : Flexibilité (Paramètres, Sous-flows)
 python pipelines/workshop/prefect/Prefect_Workshop.py part4
 
-# Part 5: Full Pipeline with MLflow
-python pipelines/workshop/prefect/Prefect_Workshop.py full
+# Partie 5 : Pipeline Complet avec MLflow
+python pipelines/workshop/prefect/Prefect_Workshop.py part5
 ```
 
-### Dagster Workshop (Bonus)
+### Atelier Dagster (Bonus)
 
 ```bash
-# Command line
+# Ligne de commande
 python pipelines/workshop/dagster/Dagster_Workshop.py full
 
-# With UI (recommended)
+# Avec interface (recommandé)
 dagster dev -f pipelines/workshop/dagster/Dagster_Workshop.py
-# Open http://localhost:3000
+# Ouvrir http://localhost:3000
 ```
 
-### Reference Implementations
+### Implémentations de Référence
 
 ```bash
-# Complete Prefect pipeline
+# Pipeline Prefect complet
 python pipelines/examples/Prefect_ML_Pipeline.py
 
-# Complete Dagster pipeline
+# Pipeline Dagster complet
 dagster dev -f pipelines/examples/Dagster_ML_Pipeline.py
 
-# Airflow reference (read the code)
+# Référence Airflow (lire le code)
 # pipelines/examples/Airflow_ML_Pipeline.py
 ```
 
-### Viewing Results
+### Visualiser les Résultats
 
-- **MLflow UI**: http://localhost:5000
-- **Dagster UI**: http://localhost:3000
-- **Prefect UI**: `prefect server start` → http://localhost:4200
+- **Interface MLflow** : http://localhost:5000
+- **Interface Dagster** : http://localhost:3000
+- **Interface Prefect** : `prefect server start` → http://localhost:4200
 
 ---
 
-## 7. Quick Reference
+## 7. Référence Rapide
 
-### Prefect Patterns
+### Patterns Prefect
 
 ```python
-# Basic task
+# Tâche basique
 @task
 def my_task(df: pd.DataFrame) -> pd.DataFrame:
     return process(df)
 
-# With retries
+# Avec réessais
 @task(retries=3, retry_delay_seconds=60)
 def resilient_task():
     ...
 
-# With caching
+# Avec cache
 @task(cache_key_fn=task_input_hash, cache_expiration=timedelta(hours=1))
 def cached_task(df: pd.DataFrame):
     ...
 
-# Flow with parameters
+# Flow avec paramètres
 @flow(log_prints=True)
 def my_flow(n_estimators: int = 100):
     ...
 
-# Subflow composition
+# Composition de sous-flows
 @flow
 def parent_flow():
     data = data_prep_subflow()
     result = training_subflow(data)
 ```
 
-### Dagster Patterns
+### Patterns Dagster
 
 ```python
-# Asset definition
-@asset(group_name="features", description="Engineered features")
+# Définition d'asset
+@asset(group_name="features", description="Features ingéniérées")
 def customer_features(raw_data: pd.DataFrame) -> pd.DataFrame:
-    # Dependency inferred from parameter name!
+    # Dépendance inférée depuis le nom du paramètre !
     return process(raw_data)
 
-# Materialize assets
+# Matérialiser les assets
 materialize([raw_data, customer_features, model])
 ```
 
-### MLflow in Orchestrators
+### MLflow dans les Orchestrateurs
 
 ```python
-# Inside a Prefect task
+# Dans une tâche Prefect
 @task
 def train_with_mlflow(df, params):
     mlflow.set_tracking_uri("http://localhost:5000")
@@ -438,24 +438,24 @@ def train_with_mlflow(df, params):
     return model
 ```
 
-### Comparison Table
+### Tableau de Comparaison
 
 | Aspect | Prefect | Airflow | Dagster |
 |--------|---------|---------|---------|
-| Define unit | `@task` | `PythonOperator` | `@asset` |
-| Define pipeline | `@flow` | `DAG(...)` | `Definitions` |
-| Data passing | Return values | XCom + files | Function params |
-| Retries | `@task(retries=3)` | `default_args` | Policies |
-| Caching | `cache_key_fn=...` | Manual | Built-in |
-| Dependencies | Implicit (calls) | Explicit (`>>`) | Inferred |
-| Philosophy | Task-centric | Task-centric | Asset-centric |
+| Définir l'unité | `@task` | `PythonOperator` | `@asset` |
+| Définir le pipeline | `@flow` | `DAG(...)` | `Definitions` |
+| Passage de données | Valeurs de retour | XCom + fichiers | Paramètres de fonction |
+| Réessais | `@task(retries=3)` | `default_args` | Politiques |
+| Cache | `cache_key_fn=...` | Manuel | Intégré |
+| Dépendances | Implicite (appels) | Explicite (`>>`) | Inférées |
+| Philosophie | Centré sur les tâches | Centré sur les tâches | Centré sur les assets |
 
 ---
 
-## Next Steps
+## Prochaines Étapes
 
-1. **Start with Prefect**: `python pipelines/workshop/prefect/Prefect_Workshop.py part1`
-2. **Progress through all parts**: part1 → part2 → part3 → part4 → full
-3. **Try Dagster bonus**: Transform your knowledge to asset-centric thinking
-4. **Review Airflow**: Understand why alternatives exist
-5. **Explore reference pipelines**: See production-ready patterns
+1. **Commencer avec Prefect** : `python pipelines/workshop/prefect/Prefect_Workshop.py part1`
+2. **Progresser à travers toutes les parties** : part1 → part2 → part3 → part4 → part5
+3. **Essayer le bonus Dagster** : Transformer vos connaissances vers la pensée centrée sur les assets
+4. **Réviser Airflow** : Comprendre pourquoi les alternatives existent
+5. **Explorer les pipelines de référence** : Voir les patterns prêts pour la production

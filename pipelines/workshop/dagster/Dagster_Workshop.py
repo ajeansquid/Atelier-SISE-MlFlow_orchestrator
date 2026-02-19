@@ -1,36 +1,36 @@
 # =============================================================================
-# Dagster Workshop - BONUS: From Tasks to Assets
+# Atelier Dagster - BONUS : Des Tâches aux Assets
 # =============================================================================
 #
-# You've completed the Prefect workshop. Now let's see how the SAME pipeline
-# looks in Dagster - and why the difference matters.
+# Vous avez terminé l'atelier Prefect. Voyons maintenant à quoi ressemble le MÊME pipeline
+# dans Dagster - et pourquoi la différence est importante.
 #
-# THE KEY SHIFT:
-#   Prefect: "Run load_data, then engineer_features, then train_model..."
-#   Dagster: "I want trained_model to exist. Figure out what's needed."
+# LE CHANGEMENT CLÉ :
+#   Prefect : "Exécuter load_data, puis engineer_features, puis train_model..."
+#   Dagster : "Je veux que trained_model existe. Déterminez ce qui est nécessaire."
 #
-# This workshop is a GUIDED TRANSFORMATION:
-#   1. We start with your completed Prefect pipeline
-#   2. We convert each task to a Dagster asset
-#   3. We explore the Dagster UI and asset graph
-#   4. We learn materialization patterns
-#   5. We add SCHEDULES for automation!
+# Cet atelier est une TRANSFORMATION GUIDÉE :
+#   1. Nous commençons avec votre pipeline Prefect terminé
+#   2. Nous convertissons chaque tâche en un asset Dagster
+#   3. Nous explorons l'interface Dagster et le graphe d'assets
+#   4. Nous apprenons les patterns de matérialisation
+#   5. Nous ajoutons des PLANIFICATIONS pour l'automatisation !
 #
 # -----------------------------------------------------------------------------
-# SETUP (Docker - Recommended)
+# CONFIGURATION (Docker - Recommandé)
 # -----------------------------------------------------------------------------
 #
-# 1. Start the stack:
+# 1. Démarrer la stack :
 #      docker-compose --profile dagster up -d
 #
-# 2. Access the UIs:
-#      - Dagster: http://localhost:3000 (assets, schedules, runs)
-#      - MLflow:  http://localhost:5000 (experiments, models)
+# 2. Accéder aux interfaces :
+#      - Dagster: http://localhost:3000 (assets, planifications, exécutions)
+#      - MLflow:  http://localhost:5000 (expérimentations, modèles)
 #
-# 3. In Dagster UI:
-#      - View asset graph
-#      - Materialize assets manually
-#      - Enable schedules for automation
+# 3. Dans l'interface Dagster :
+#      - Voir le graphe d'assets
+#      - Matérialiser les assets manuellement
+#      - Activer les planifications pour l'automatisation
 #
 # =============================================================================
 
@@ -54,7 +54,7 @@ from datetime import datetime
 import os
 
 # -----------------------------------------------------------------------------
-# Configuration (same as Prefect)
+# Configuration (identique à Prefect)
 # -----------------------------------------------------------------------------
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
@@ -69,10 +69,10 @@ FEATURE_COLS = [
 
 
 # =============================================================================
-# PART 1: THE TRANSFORMATION - From @task to @asset
+# PARTIE 1 : LA TRANSFORMATION - De @task à @asset
 # =============================================================================
 #
-# Here's your Prefect code (from the workshop):
+# Voici votre code Prefect (de l'atelier) :
 #
 #   @task
 #   def load_data() -> pd.DataFrame:
@@ -89,34 +89,34 @@ FEATURE_COLS = [
 #       features = engineer_features(df)
 #       ...
 #
-# In Dagster, we don't define "tasks to run" - we define "data that exists".
-# Let's transform each piece:
+# Dans Dagster, nous ne définissons pas de "tâches à exécuter" - nous définissons "des données qui existent".
+# Transformons chaque élément :
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# ASSET 1: Raw Customer Data
+# ASSET 1 : Données Clients Brutes
 # -----------------------------------------------------------------------------
-# Prefect version:
+# Version Prefect :
 #   @task
 #   def load_data() -> pd.DataFrame:
 #       return pd.read_csv(DATA_PATH)
 #
-# Dagster version:
+# Version Dagster :
 
 @asset(
     group_name="ingestion",
-    description="Raw customer data loaded from CSV or generated synthetically"
+    description="Données clients brutes chargées depuis CSV ou générées synthétiquement"
 )
 def raw_customer_data() -> pd.DataFrame:
     """
-    SOURCE ASSET: No dependencies (no parameters).
+    ASSET SOURCE : Pas de dépendances (pas de paramètres).
 
-    This is equivalent to your Prefect load_data() task, but:
-    - It's named as DATA (raw_customer_data) not ACTION (load_data)
-    - It has metadata (group_name, description)
-    - It's a piece of data that EXISTS in your system
+    Ceci est équivalent à votre tâche load_data() de Prefect, mais :
+    - Elle est nommée comme DONNÉES (raw_customer_data) et non ACTION (load_data)
+    - Elle a des métadonnées (group_name, description)
+    - C'est une pièce de données qui EXISTE dans votre système
     """
-    print("Loading raw customer data...")
+    print("Chargement des données clients brutes...")
 
     if os.path.exists(DATA_PATH):
         df = pd.read_csv(DATA_PATH)
@@ -136,41 +136,41 @@ def raw_customer_data() -> pd.DataFrame:
             'churned': np.random.binomial(1, 0.3, n)
         })
 
-    print(f"Asset contains {len(df)} customers")
+    print(f"L'asset contient {len(df)} clients")
     return df
 
 
 # -----------------------------------------------------------------------------
-# ASSET 2: Engineered Features
+# ASSET 2 : Features Ingéniérées
 # -----------------------------------------------------------------------------
-# Prefect version:
+# Version Prefect :
 #   @task
 #   def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 #       ...
 #
-# Dagster version:
-# NOTICE: The parameter name IS the dependency!
+# Version Dagster :
+# REMARQUE : Le nom du paramètre EST la dépendance !
 
 @asset(
     group_name="features",
-    description="Customer features with RFM scores and ratios"
+    description="Features clients avec scores RFM et ratios"
 )
 def customer_features(raw_customer_data: pd.DataFrame) -> pd.DataFrame:
     """
-    DERIVED ASSET: Depends on raw_customer_data.
+    ASSET DÉRIVÉ : Dépend de raw_customer_data.
 
-    KEY INSIGHT: The parameter name 'raw_customer_data' matches the asset name
-    above. Dagster AUTOMATICALLY knows this asset depends on raw_customer_data.
+    POINT CLÉ : Le nom du paramètre 'raw_customer_data' correspond au nom de l'asset
+    ci-dessus. Dagster sait AUTOMATIQUEMENT que cet asset dépend de raw_customer_data.
 
-    No explicit wiring needed! Compare with Prefect:
-        features = engineer_features(df)  # You wire it in the flow
+    Pas besoin de câblage explicite ! Comparez avec Prefect :
+        features = engineer_features(df)  # Vous le câblez dans le flow
 
-    In Dagster, the dependency is DECLARED in the function signature.
+    Dans Dagster, la dépendance est DÉCLARÉE dans la signature de la fonction.
     """
-    print("Computing customer_features asset...")
+    print("Calcul de l'asset customer_features...")
     df = raw_customer_data.copy()
 
-    # Feature engineering (same logic as Prefect)
+    # Feature engineering (même logique que Prefect)
     df['recency_frequency_ratio'] = df['recency_days'] / (df['frequency'] + 1)
     df['monetary_per_order'] = df['monetary_value'] / (df['total_orders'] + 1)
     df['order_frequency'] = df['total_orders'] / (df['days_since_signup'] + 1)
@@ -181,42 +181,42 @@ def customer_features(raw_customer_data: pd.DataFrame) -> pd.DataFrame:
     df['m_score'] = pd.qcut(df['monetary_value'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
     df['rfm_score'] = df['r_score'] + df['f_score'] + df['m_score']
 
-    print(f"Asset shape: {df.shape}")
+    print(f"Forme de l'asset : {df.shape}")
     return df
 
 
 # -----------------------------------------------------------------------------
-# ASSET 3: Trained Model
+# ASSET 3 : Modèle Entraîné
 # -----------------------------------------------------------------------------
-# In Prefect, train_model was a task that returned (model, X_test, y_test, run_id)
-# In Dagster, we model this as a DICT asset containing everything
+# Dans Prefect, train_model était une tâche qui retournait (model, X_test, y_test, run_id)
+# Dans Dagster, nous modélisons ceci comme un asset DICT contenant tout
 
 @asset(
     group_name="training",
-    description="Trained RandomForest model with MLflow tracking"
+    description="Modèle RandomForest entraîné avec suivi MLflow"
 )
 def trained_model(customer_features: pd.DataFrame) -> dict:
     """
-    MODEL ASSET: Contains model + metadata.
+    ASSET MODÈLE : Contient le modèle + métadonnées.
 
-    This asset:
-    - Depends on customer_features (inferred from parameter)
-    - Integrates with MLflow for tracking
-    - Returns a dict with model, metrics, and run_id
+    Cet asset :
+    - Dépend de customer_features (inféré depuis le paramètre)
+    - S'intègre avec MLflow pour le suivi
+    - Retourne un dict avec model, métriques, et run_id
 
-    When you ask Dagster to materialize trained_model, it automatically
-    materializes raw_customer_data and customer_features first!
+    Quand vous demandez à Dagster de matérialiser trained_model, il matérialise
+    automatiquement raw_customer_data et customer_features d'abord !
     """
-    print("Training model (with MLflow tracking)...")
+    print("Entraînement du modèle (avec suivi MLflow)...")
 
-    # Prepare data
+    # Préparer les données
     X = customer_features[FEATURE_COLS]
     y = customer_features['churned']
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    # MLflow tracking
+    # Suivi MLflow
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
 
@@ -242,7 +242,7 @@ def trained_model(customer_features: pd.DataFrame) -> dict:
 
         print(f"Model trained! Accuracy: {metrics['accuracy']:.4f}")
 
-    # Return everything as a dict (this IS the asset)
+    # Retourner tout comme un dict (c'est ceci qui EST l'asset)
     return {
         "model": model,
         "run_id": run.info.run_id,
@@ -252,22 +252,22 @@ def trained_model(customer_features: pd.DataFrame) -> dict:
 
 
 # -----------------------------------------------------------------------------
-# ASSET 4: Predictions
+# ASSET 4 : Prédictions
 # -----------------------------------------------------------------------------
-# Notice: This asset has TWO dependencies!
+# Remarque : Cet asset a DEUX dépendances !
 
 @asset(
     group_name="predictions",
-    description="Churn predictions for all customers"
+    description="Prédictions de churn pour tous les clients"
 )
 def churn_predictions(
     trained_model: dict,
     customer_features: pd.DataFrame
 ) -> pd.DataFrame:
     """
-    MULTI-DEPENDENCY ASSET: Depends on trained_model AND customer_features.
+    ASSET MULTI-DÉPENDANCE : Dépend de trained_model ET customer_features.
 
-    Look at the asset graph in the UI - you'll see:
+    Regardez le graphe d'assets dans l'interface - vous verrez :
 
         raw_customer_data
               │
@@ -281,9 +281,9 @@ def churn_predictions(
                       v
             churn_predictions
 
-    Both dependencies are inferred from parameter names!
+    Les deux dépendances sont inférées depuis les noms de paramètres !
     """
-    print("Generating predictions...")
+    print("Génération des prédictions...")
 
     model = trained_model["model"]
     X = customer_features[FEATURE_COLS]
@@ -299,36 +299,36 @@ def churn_predictions(
     })
 
     high_risk = (probabilities > 0.7).sum()
-    print(f"Generated {len(result)} predictions ({high_risk} high-risk)")
+    print(f"Généré {len(result)} prédictions ({high_risk} à haut risque)")
 
     return result
 
 
 # -----------------------------------------------------------------------------
-# ASSET 5: Saved Predictions (I/O as an asset!)
+# ASSET 5 : Prédictions Sauvegardées (I/O comme asset !)
 # -----------------------------------------------------------------------------
 
 @asset(
     group_name="output",
-    description="Predictions persisted to CSV file"
+    description="Prédictions persistées dans un fichier CSV"
 )
 def saved_predictions(churn_predictions: pd.DataFrame) -> dict:
     """
-    OUTPUT ASSET: Represents "predictions that have been saved".
+    ASSET OUTPUT : Représente "les prédictions qui ont été sauvegardées".
 
-    Even file I/O is modeled as data! This asset depends on churn_predictions
-    and produces metadata about what was saved.
+    Même l'I/O fichier est modélisé comme données ! Cet asset dépend de churn_predictions
+    et produit des métadonnées sur ce qui a été sauvegardé.
 
-    This is powerful because:
-    - You can see in the UI when predictions were last saved
-    - You can re-materialize just this asset to re-save
-    - The dependency chain is clear and visible
+    Ceci est puissant car :
+    - Vous pouvez voir dans l'interface quand les prédictions ont été sauvegardées pour la dernière fois
+    - Vous pouvez re-matérialiser juste cet asset pour re-sauvegarder
+    - La chaîne de dépendances est claire et visible
     """
     output_path = os.path.join(PROJECT_ROOT, "data", "predictions_dagster.csv")
 
     churn_predictions.to_csv(output_path, index=False)
 
-    print(f"Saved {len(churn_predictions)} predictions to {output_path}")
+    print(f"Sauvegardé {len(churn_predictions)} prédictions dans {output_path}")
 
     return {
         "path": output_path,
@@ -339,11 +339,11 @@ def saved_predictions(churn_predictions: pd.DataFrame) -> dict:
 
 
 # =============================================================================
-# PART 2: THE DEFINITIONS - Registering Assets
+# PARTIE 2 : LES DÉFINITIONS - Enregistrer les Assets
 # =============================================================================
 #
-# In Prefect, you define a @flow that wires tasks together.
-# In Dagster, you register assets with Definitions - no wiring needed!
+# Dans Prefect, vous définissez un @flow qui câble les tâches ensemble.
+# Dans Dagster, vous enregistrez les assets avec Definitions - pas besoin de câblage !
 
 all_assets = [
     raw_customer_data,
@@ -355,55 +355,55 @@ all_assets = [
 
 
 # =============================================================================
-# PART 5: AUTOMATION - Jobs & Schedules
+# PARTIE 5 : AUTOMATISATION - Jobs & Planifications
 # =============================================================================
 #
-# This is where ORCHESTRATION becomes real automation!
+# C'est ici que l'ORCHESTRATION devient une vraie automatisation !
 #
-# In Dagster:
-# - A JOB defines WHICH assets to materialize
-# - A SCHEDULE defines WHEN to run the job
-# - The DAEMON (running in Docker) executes schedules
+# Dans Dagster :
+# - Un JOB définit QUELS assets matérialiser
+# - Une PLANIFICATION définit QUAND exécuter le job
+# - Le DAEMON (exécuté dans Docker) exécute les planifications
 #
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# JOB: Which assets to materialize
+# JOB : Quels assets matérialiser
 # -----------------------------------------------------------------------------
 
 training_job = define_asset_job(
     name="churn_training_job",
-    selection=AssetSelection.all(),  # Materialize all assets
-    description="Full churn prediction pipeline - trains model and generates predictions"
+    selection=AssetSelection.all(),  # Matérialiser tous les assets
+    description="Pipeline complet de prédiction de churn - entraîne le modèle et génère les prédictions"
 )
 
-# Alternative: selective jobs
+# Alternative : jobs sélectifs
 data_prep_job = define_asset_job(
     name="data_preparation_job",
     selection=[AssetKey("raw_customer_data"), AssetKey("customer_features")],
-    description="Prepare data without training"
+    description="Préparer les données sans entraînement"
 )
 
 # -----------------------------------------------------------------------------
-# SCHEDULE: When to run the job
+# PLANIFICATION : Quand exécuter le job
 # -----------------------------------------------------------------------------
 
 training_schedule = ScheduleDefinition(
     name="churn_training_schedule",
     job=training_job,
-    cron_schedule="*/2 * * * *",  # Every 2 minutes (for demo)
-    description="Automated retraining every 2 minutes"
+    cron_schedule="*/2 * * * *",  # Toutes les 2 minutes (pour la démo)
+    description="Réentraînement automatisé toutes les 2 minutes"
 )
 
-# Alternative schedule examples (commented out):
+# Exemples de planifications alternatives (commentés) :
 # daily_training = ScheduleDefinition(
 #     name="daily_training",
 #     job=training_job,
-#     cron_schedule="0 6 * * *",  # Every day at 6 AM
+#     cron_schedule="0 6 * * *",  # Tous les jours à 6h du matin
 # )
 
 # -----------------------------------------------------------------------------
-# DEFINITIONS: Register everything with Dagster
+# DÉFINITIONS : Enregistrer tout avec Dagster
 # -----------------------------------------------------------------------------
 
 defs = Definitions(
@@ -414,120 +414,120 @@ defs = Definitions(
 
 
 # =============================================================================
-# PART 3: MATERIALIZATION - Running the Pipeline
+# PARTIE 3 : MATÉRIALISATION - Exécuter le Pipeline
 # =============================================================================
 #
-# "Materializing" an asset means computing it and storing the result.
+# "Matérialiser" un asset signifie le calculer et stocker le résultat.
 #
-# Key differences from Prefect:
+# Différences clés avec Prefect :
 #
-# Prefect:
-#   training_pipeline()  # Run the whole flow
+# Prefect :
+#   training_pipeline()  # Exécuter tout le flow
 #
-# Dagster:
-#   materialize([trained_model])  # "I want trained_model to exist"
-#   # Dagster figures out it needs raw_customer_data and customer_features first!
+# Dagster :
+#   materialize([trained_model])  # "Je veux que trained_model existe"
+#   # Dagster comprend qu'il a besoin de raw_customer_data et customer_features d'abord !
 #
-# You can also materialize SUBSETS:
-#   materialize([customer_features])  # Just data prep, no training
-#   materialize([churn_predictions])  # Everything needed for predictions
+# Vous pouvez aussi matérialiser des SOUS-ENSEMBLES :
+#   materialize([customer_features])  # Juste la préparation de données, pas d'entraînement
+#   materialize([churn_predictions])  # Tout ce qui est nécessaire pour les prédictions
 # =============================================================================
 
 def run_full_pipeline():
-    """Materialize all assets (equivalent to running the full Prefect flow)."""
+    """Matérialiser tous les assets (équivalent à exécuter le flow Prefect complet)."""
     print("=" * 60)
-    print("MATERIALIZING ALL ASSETS")
+    print("MATÉRIALISATION DE TOUS LES ASSETS")
     print("=" * 60)
 
     result = materialize(all_assets)
 
-    # Get outputs
+    # Obtenir les sorties
     saved = result.output_for_node("saved_predictions")
     model_data = result.output_for_node("trained_model")
 
     print("\n" + "=" * 60)
-    print("MATERIALIZATION COMPLETE")
+    print("MATÉRIALISATION TERMINÉE")
     print("=" * 60)
-    print(f"Model accuracy:     {model_data['metrics']['accuracy']:.4f}")
-    print(f"Predictions saved:  {saved['record_count']}")
-    print(f"High-risk customers:{saved['high_risk_count']}")
-    print(f"Output file:        {saved['path']}")
-    print(f"MLflow run:         {model_data['run_id']}")
+    print(f"Précision du modèle :      {model_data['metrics']['accuracy']:.4f}")
+    print(f"Prédictions sauvegardées : {saved['record_count']}")
+    print(f"Clients à haut risque :   {saved['high_risk_count']}")
+    print(f"Fichier de sortie :        {saved['path']}")
+    print(f"Exécution MLflow :         {model_data['run_id']}")
 
     return result
 
 
 def run_data_prep_only():
-    """Materialize only data preparation assets (no training)."""
+    """Matérialiser seulement les assets de préparation de données (pas d'entraînement)."""
     print("=" * 60)
-    print("MATERIALIZING DATA PREP ONLY")
+    print("MATÉRIALISATION DE LA PRÉPARATION DE DONNÉES UNIQUEMENT")
     print("=" * 60)
 
-    # Only materialize up to customer_features
+    # Matérialiser seulement jusqu'à customer_features
     result = materialize([raw_customer_data, customer_features])
 
     features = result.output_for_node("customer_features")
-    print(f"\nData prepared: {features.shape}")
+    print(f"\nDonnées préparées : {features.shape}")
 
     return result
 
 
 def run_from_existing_features():
     """
-    Demonstrate partial materialization.
+    Démontrer la matérialisation partielle.
 
-    In a real scenario, you might have customer_features already computed
-    and just want to retrain the model.
+    Dans un scénario réel, vous pourriez avoir customer_features déjà calculé
+    et vouloir juste réentraîner le modèle.
     """
     print("=" * 60)
-    print("SELECTIVE MATERIALIZATION")
+    print("MATÉRIALISATION SÉLECTIVE")
     print("=" * 60)
-    print("This shows how Dagster can re-run only what's needed.")
-    print("In the UI, you can click individual assets to materialize them.")
+    print("Ceci montre comment Dagster peut ré-exécuter seulement ce qui est nécessaire.")
+    print("Dans l'interface, vous pouvez cliquer sur des assets individuels pour les matérialiser.")
 
-    # Materialize everything
+    # Matérialiser tout
     result = materialize(all_assets)
 
     return result
 
 
 # =============================================================================
-# PART 4: THE UI - The Real Dagster Experience
+# PARTIE 4 : L'INTERFACE - L'Expérience Dagster Réelle
 # =============================================================================
 #
-# The command-line is useful, but Dagster's power is in the UI!
+# La ligne de commande est utile, mais la puissance de Dagster est dans l'interface !
 #
-# Start with Docker:
+# Démarrez avec Docker :
 #   docker-compose --profile dagster up -d
 #
-# Then open http://localhost:3000 and explore:
+# Puis ouvrez http://localhost:3000 et explorez :
 #
-# 1. ASSET GRAPH (Assets > View global asset lineage)
-#    - See the visual dependency graph
-#    - Click an asset to see its metadata
-#    - See which assets are materialized (have data) vs unmaterialized
+# 1. GRAPHE D'ASSETS (Assets > View global asset lineage)
+#    - Voir le graphe de dépendances visuel
+#    - Cliquer sur un asset pour voir ses métadonnées
+#    - Voir quels assets sont matérialisés (ont des données) vs non matérialisés
 #
-# 2. MATERIALIZE (Manual)
-#    - Click "Materialize all" to run everything
-#    - Or click individual assets to materialize just that subset
-#    - Watch the logs in real-time
+# 2. MATÉRIALISER (Manuel)
+#    - Cliquer "Materialize all" pour tout exécuter
+#    - Ou cliquer sur des assets individuels pour matérialiser juste ce sous-ensemble
+#    - Regarder les journaux en temps réel
 #
-# 3. SCHEDULES (Automation!)
-#    - Go to Overview > Schedules
-#    - Find "churn_training_schedule"
-#    - Toggle it ON
-#    - Watch it run every 2 minutes!
-#    - Check MLflow UI for new experiments
+# 3. PLANIFICATIONS (Automatisation !)
+#    - Aller dans Overview > Schedules
+#    - Trouver "churn_training_schedule"
+#    - L'activer (toggle ON)
+#    - Regarder l'exécution toutes les 2 minutes !
+#    - Vérifier l'interface MLflow pour les nouvelles expériences
 #
 # 4. JOBS
-#    - Go to Overview > Jobs
-#    - See defined jobs (churn_training_job, data_preparation_job)
-#    - Launch jobs manually or via schedules
+#    - Aller dans Overview > Jobs
+#    - Voir les jobs définis (churn_training_job, data_preparation_job)
+#    - Lancer les jobs manuellement ou via les planifications
 #
-# 5. RUNS
-#    - See history of all materializations
-#    - Debug failed runs
-#    - Re-run from failures
+# 5. EXÉCUTIONS
+#    - Voir l'historique de toutes les matérialisations
+#    - Déboguer les exécutions échouées
+#    - Ré-exécuter depuis les échecs
 #
 # =============================================================================
 
@@ -540,7 +540,7 @@ if __name__ == "__main__":
     import sys
 
     print("=" * 60)
-    print("DAGSTER WORKSHOP - From Tasks to Assets")
+    print("ATELIER DAGSTER - Des Tâches aux Assets")
     print("=" * 60)
 
     mode = sys.argv[1] if len(sys.argv) > 1 else "help"
@@ -556,53 +556,53 @@ if __name__ == "__main__":
 
     else:
         print("""
-DAGSTER WORKSHOP - BONUS
+ATELIER DAGSTER - BONUS
 ========================
 
-This workshop transforms your Prefect pipeline into Dagster assets.
+Cet atelier transforme votre pipeline Prefect en assets Dagster.
 
-SETUP (Docker - Recommended):
+CONFIGURATION (Docker - Recommandé) :
   docker-compose --profile dagster up -d
 
-  UIs:
+  Interfaces :
     Dagster: http://localhost:3000
     MLflow:  http://localhost:5000
 
-COMMAND LINE USAGE (for testing):
-  python Dagster_Workshop.py full       # Materialize all assets
-  python Dagster_Workshop.py data       # Only data prep (no training)
-  python Dagster_Workshop.py selective  # Demo selective materialization
+UTILISATION EN LIGNE DE COMMANDE (pour tester) :
+  python Dagster_Workshop.py full       # Matérialiser tous les assets
+  python Dagster_Workshop.py data       # Seulement préparation de données (pas d'entraînement)
+  python Dagster_Workshop.py selective  # Démo de matérialisation sélective
 
-THE KEY CONCEPTS:
+LES CONCEPTS CLÉS :
 
-1. ASSETS vs TASKS
-   Prefect: @task def load_data()     -> "run this function"
-   Dagster: @asset def customer_data  -> "this data exists"
+1. ASSETS vs TÂCHES
+   Prefect: @task def load_data()     -> "exécuter cette fonction"
+   Dagster: @asset def customer_data  -> "ces données existent"
 
-2. AUTOMATIC DEPENDENCIES
-   Prefect: features = engineer(df)   -> you wire it in the flow
-   Dagster: def features(raw_data):   -> dependency from parameter name!
+2. DÉPENDANCES AUTOMATIQUES
+   Prefect: features = engineer(df)   -> vous le câblez dans le flow
+   Dagster: def features(raw_data):   -> dépendance depuis le nom de paramètre !
 
-3. MATERIALIZATION
-   Prefect: flow()                    -> run the whole pipeline
-   Dagster: materialize([asset])      -> "make this exist" (deps auto-resolved)
+3. MATÉRIALISATION
+   Prefect: flow()                    -> exécuter tout le pipeline
+   Dagster: materialize([asset])      -> "faire exister ceci" (déps auto-résolues)
 
-4. JOBS & SCHEDULES (Automation!)
-   Jobs define WHICH assets to materialize
-   Schedules define WHEN to run jobs
-   The daemon (in Docker) executes them automatically
+4. JOBS & PLANIFICATIONS (Automatisation !)
+   Les jobs définissent QUELS assets matérialiser
+   Les planifications définissent QUAND exécuter les jobs
+   Le daemon (dans Docker) les exécute automatiquement
 
-AUTOMATION:
-  1. Open Dagster UI: http://localhost:3000
-  2. Go to Overview > Schedules
-  3. Enable "churn_training_schedule"
-  4. Watch runs appear every 2 minutes!
-  5. Check MLflow UI for new experiments
+AUTOMATISATION :
+  1. Ouvrir l'interface Dagster : http://localhost:3000
+  2. Aller dans Overview > Schedules
+  3. Activer "churn_training_schedule"
+  4. Regarder les exécutions apparaître toutes les 2 minutes !
+  5. Vérifier l'interface MLflow pour les nouvelles expériences
 
-THE GRAPH:
-  Open the UI to see your data lineage visually.
-  Click assets to materialize them individually.
+LE GRAPHE :
+  Ouvrir l'interface pour voir votre linéage de données visuellement.
+  Cliquer sur les assets pour les matérialiser individuellement.
 """)
 
-        print(f"Dagster UI: http://localhost:3000")
-        print(f"MLflow UI:  {MLFLOW_TRACKING_URI}")
+        print(f"Interface Dagster : http://localhost:3000")
+        print(f"Interface MLflow :  {MLFLOW_TRACKING_URI}")

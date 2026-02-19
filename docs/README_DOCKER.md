@@ -1,6 +1,6 @@
-# Docker Setup for MLflow + Orchestrators Workshop
+# Configuration Docker pour l'Atelier MLflow + Orchestrateurs
 
-## Architecture Overview
+## Vue d'Ensemble de l'Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -24,167 +24,173 @@
 │                    Logs experiments to MLflow                            │
 └─────────────────────────────────────────────────────────────────────────┘
 
-YOUR MACHINE:
-  - VS Code with notebooks (learning)
-  - Deploy flows via CLI
-  - Watch automation in UIs
+VOTRE MACHINE :
+  - VS Code avec notebooks (apprentissage)
+  - Déployer des flows via CLI
+  - Observer l'automatisation dans les interfaces
 ```
 
-**Key Point:** Everything runs in Docker. You deploy flows and watch them run automatically. This is REAL orchestration.
+**Point Clé :** Tout s'exécute dans Docker. Vous déployez des flows et les regardez s'exécuter automatiquement. C'est de la VRAIE orchestration.
 
 ---
 
-## Quick Start
+## Démarrage Rapide
 
-### Main Workshop: MLflow + Prefect
+### Atelier Principal : MLflow + Prefect
 
 ```bash
-# Start MLflow + Prefect (server + worker)
+# Démarrer MLflow + Prefect (serveur + worker)
 docker-compose up -d
 
-# Verify services are running
+# Vérifier que les services fonctionnent
 docker-compose ps
 
-# Access UIs
+# Accéder aux interfaces
 # Prefect: http://localhost:4200
 # MLflow:  http://localhost:5000
 ```
 
-### Bonus: Add Dagster
+### Bonus : Ajouter Dagster
 
 ```bash
-# Start everything including Dagster
+# Démarrer tout incluant Dagster
 docker-compose --profile dagster up -d
 
-# Access Dagster UI
+# Accéder à l'interface Dagster
 # http://localhost:3000
 ```
 
 ---
 
-## Service Details
+## Détails des Services
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| **mlflow** | 5000 | Experiment tracking, model registry |
-| **prefect-server** | 4200 | Flow monitoring, deployments, schedules |
-| **prefect-worker** | - | Executes scheduled flows |
-| **dagster-webserver** (bonus) | 3000 | Asset graph UI, materializations |
-| **dagster-daemon** (bonus) | - | Executes scheduled jobs |
+| Service | Port | Objectif |
+|---------|------|----------|
+| **mlflow** | 5000 | Suivi d'expérimentations, registre de modèles |
+| **prefect-server** | 4200 | Monitoring de flows, déploiements, planifications |
+| **prefect-worker** | - | Exécute les flows planifiés |
+| **dagster-webserver** (bonus) | 3000 | Interface graphe d'assets, matérialisations |
+| **dagster-daemon** (bonus) | - | Exécute les jobs planifiés |
 
 ---
 
-## Workshop Workflow
+## Flux de Travail de l'Atelier
 
-### 1. Start the Stack
+### 1. Démarrer la Stack
 
 ```bash
 docker-compose up -d
 ```
 
-Wait for services to be healthy:
+Attendre que les services soient en bonne santé :
 ```bash
 docker-compose ps
-# Look for "healthy" status on mlflow and prefect-server
+# Chercher le statut "healthy" sur mlflow et prefect-server
 ```
 
-### 2. Learn the Patterns (Parts 1-5)
+### 2. Apprendre les Patterns (Parties 1-5)
 
-Run workshop parts locally to learn orchestration patterns:
+Exécuter les parties de l'atelier localement pour apprendre les patterns d'orchestration :
 
 ```bash
-# Install dependencies
+# Installer les dépendances
 pip install -r requirements.txt
 
-# Run workshop parts
+# Exécuter les parties de l'atelier
 python pipelines/workshop/prefect/Prefect_Workshop.py part1  # Tasks & Flows
-python pipelines/workshop/prefect/Prefect_Workshop.py part2  # Retries
-python pipelines/workshop/prefect/Prefect_Workshop.py part3  # Caching & Parallelism
-python pipelines/workshop/prefect/Prefect_Workshop.py part4  # Parameters
-python pipelines/workshop/prefect/Prefect_Workshop.py part5  # Full Pipeline + MLflow
+python pipelines/workshop/prefect/Prefect_Workshop.py part2  # Réessais
+python pipelines/workshop/prefect/Prefect_Workshop.py part3  # Cache & Parallélisme
+python pipelines/workshop/prefect/Prefect_Workshop.py part4  # Paramètres
+python pipelines/workshop/prefect/Prefect_Workshop.py part5  # Pipeline Complet + MLflow
 ```
 
-### 3. See Real Automation (Part 6)
+### 3. Voir l'Automatisation Réelle (Partie 6)
 
-Deploy a scheduled flow:
+Déployer un flow planifié :
 
 ```bash
 python pipelines/workshop/prefect/Prefect_Workshop.py deploy
 ```
 
-This will:
-1. Register the flow with Prefect server
-2. Create a schedule (every 2 minutes)
-3. Keep running until you press Ctrl+C
+Ceci va :
+1. Enregistrer le flow auprès du serveur Prefect
+2. Créer une planification (toutes les 2 minutes)
+3. Continuer de s'exécuter jusqu'à ce que vous appuyiez sur Ctrl+C
 
-Now watch:
-- **Prefect UI** (http://localhost:4200): See deployments and runs
-- **MLflow UI** (http://localhost:5000): See experiments appearing automatically
+Maintenant observez :
+- **Interface Prefect** (http://localhost:4200) : Voir les déploiements et exécutions
+- **Interface MLflow** (http://localhost:5000) : Voir les expérimentations apparaître automatiquement
 
-### 4. Bonus: Dagster
+### 4. Bonus : Dagster
 
 ```bash
-# Start Dagster
+# Démarrer Dagster
 docker-compose --profile dagster up -d
 ```
 
-Open http://localhost:3000:
-1. **Asset Graph**: See the data lineage
-2. **Materialize**: Click to run assets
-3. **Schedules**: Enable `churn_training_schedule`
-4. **Watch**: Runs appear every 2 minutes!
+Ouvrir http://localhost:3000 :
+1. **Graphe d'Assets** : Voir le linéage de données
+2. **Matérialiser** : Cliquer pour exécuter des assets
+3. **Planifications** : Activer `churn_training_schedule`
+4. **Observer** : Les exécutions apparaissent toutes les 2 minutes !
 
 ---
 
-## Common Commands
+## Commandes Courantes
 
 ```bash
-# Start main workshop (MLflow + Prefect)
+# Démarrer l'atelier principal (MLflow + Prefect)
 docker-compose up -d
 
-# Start with Dagster bonus
+# Démarrer avec le bonus Dagster
 docker-compose --profile dagster up -d
 
-# Stop all services
+# Arrêter tous les services
 docker-compose down
 
-# Stop and remove data (clean slate)
+# Arrêter et supprimer les données (repartir de zéro)
 docker-compose down -v
 
-# View logs
+# Voir les logs
 docker-compose logs -f mlflow
 docker-compose logs -f prefect-server
 docker-compose logs -f prefect-worker
 docker-compose logs -f dagster-webserver
 docker-compose logs -f dagster-daemon
 
-# Rebuild images after Dockerfile changes
+# Reconstruire les images après modifications des Dockerfile
 docker-compose build prefect-worker
 docker-compose --profile dagster build
 
-# Restart a service
+# Redémarrer un service
 docker-compose restart prefect-worker
 ```
 
 ---
 
-## Troubleshooting
+## Dépannage
 
-### Services not starting
+### Les services ne démarrent pas
 
 ```bash
-# Check status
+# Vérifier le statut
 docker-compose ps
 
-# Check logs for errors
+# Vérifier les logs pour les erreurs
 docker-compose logs mlflow
 docker-compose logs prefect-server
 docker-compose logs prefect-worker
 ```
 
-### Port already in use
+### Port déjà utilisé
 
-Create a `.env` file:
+Copier `.env.example` vers `.env` et ajuster les ports :
+
+```bash
+cp .env.example .env
+```
+
+Ensuite éditer `.env` avec vos ports souhaités :
 
 ```bash
 MLFLOW_PORT=5001
@@ -192,87 +198,87 @@ PREFECT_PORT=4201
 DAGSTER_PORT=3001
 ```
 
-### Prefect worker not executing flows
+### Le worker Prefect n'exécute pas les flows
 
 ```bash
-# Check worker logs
+# Vérifier les logs du worker
 docker-compose logs -f prefect-worker
 
-# Restart worker
+# Redémarrer le worker
 docker-compose restart prefect-worker
 ```
 
-### Dagster schedules not running
+### Les planifications Dagster ne s'exécutent pas
 
-Ensure the daemon is running:
+S'assurer que le daemon tourne :
 ```bash
 docker-compose logs -f dagster-daemon
 ```
 
-### MLflow not accessible from containers
+### MLflow non accessible depuis les conteneurs
 
-The containers use Docker networking. Inside containers:
-- MLflow: `http://mlflow:5000`
-- Prefect: `http://prefect-server:4200/api`
+Les conteneurs utilisent le réseau Docker. Depuis les conteneurs :
+- MLflow : `http://mlflow:5000`
+- Prefect : `http://prefect-server:4200/api`
 
-From your machine:
-- MLflow: `http://localhost:5000`
-- Prefect: `http://localhost:4200`
+Depuis votre machine :
+- MLflow : `http://localhost:5000`
+- Prefect : `http://localhost:4200`
 
 ---
 
-## Data Persistence
+## Persistance des Données
 
-Data is stored in Docker volumes:
+Les données sont stockées dans des volumes Docker :
 
-| Volume | Contains |
+| Volume | Contenu |
 |--------|----------|
-| `workshop-mlflow-data` | Experiments, runs, models |
-| `workshop-prefect-data` | Flow run history, deployments |
-| `workshop-dagster-data` | Asset materializations |
+| `workshop-mlflow-data` | Expérimentations, exécutions, modèles |
+| `workshop-prefect-data` | Historique des exécutions de flows, déploiements |
+| `workshop-dagster-data` | Matérialisations d'assets |
 
-To reset all data:
+Pour réinitialiser toutes les données :
 ```bash
 docker-compose down -v
 ```
 
 ---
 
-## For Instructors
+## Pour les Formateurs
 
-### Before Workshop
+### Avant l'Atelier
 
 ```bash
-# Clean state
+# État propre
 docker-compose down -v
 
-# Pull and build images
+# Télécharger et construire les images
 docker-compose pull
 docker-compose build
 docker-compose --profile dagster build
 
-# Start and verify
+# Démarrer et vérifier
 docker-compose up -d
-docker-compose ps  # All should be healthy
+docker-compose ps  # Tous doivent être en bonne santé (healthy)
 ```
 
-### During Workshop
+### Pendant l'Atelier
 
-Students run:
+Les étudiants exécutent :
 ```bash
 docker-compose up -d
 pip install -r requirements.txt
 ```
 
-Then follow the workshop flow:
-1. Parts 1-5: Learn patterns locally
-2. Part 6: Deploy and watch automation
-3. Bonus: Explore Dagster
+Puis suivent le flux de l'atelier :
+1. Parties 1-5 : Apprendre les patterns localement
+2. Partie 6 : Déployer et observer l'automatisation
+3. Bonus : Explorer Dagster
 
-### Key Teaching Points
+### Points Pédagogiques Clés
 
-1. **Why Docker?** Real orchestration needs infrastructure (servers, workers, daemons)
-2. **Prefect architecture**: Server (API + UI) + Worker (executes flows)
-3. **Dagster architecture**: Webserver (UI) + Daemon (executes schedules)
-4. **MLflow integration**: Both orchestrators log to the same MLflow server
-5. **Automation**: Flows run on schedule without manual intervention
+1. **Pourquoi Docker ?** L'orchestration réelle nécessite de l'infrastructure (serveurs, workers, daemons)
+2. **Architecture Prefect** : Serveur (API + UI) + Worker (exécute les flows)
+3. **Architecture Dagster** : Webserver (UI) + Daemon (exécute les planifications)
+4. **Intégration MLflow** : Les deux orchestrateurs loguent vers le même serveur MLflow
+5. **Automatisation** : Les flows s'exécutent selon la planification sans intervention manuelle

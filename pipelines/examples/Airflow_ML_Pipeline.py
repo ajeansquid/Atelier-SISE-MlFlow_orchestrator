@@ -1,23 +1,23 @@
 # =============================================================================
-# Airflow ML Pipeline - Customer Churn Prediction
+# Pipeline ML Airflow - Prédiction du Churn Client
 # =============================================================================
 #
-# This pipeline demonstrates Airflow's task-centric approach:
-# - DAG (Directed Acyclic Graph) as first-class citizen
-# - PythonOperator for task definitions
-# - XCom for inter-task communication (limited to small data)
-# - File I/O required for DataFrames (too large for XCom)
-# - Manual cleanup of temp files
-# - **context for accessing Airflow metadata
+# Ce pipeline démontre l'approche centrée sur les tâches d'Airflow :
+# - DAG (Directed Acyclic Graph) comme citoyen de première classe
+# - PythonOperator pour les définitions de tâches
+# - XCom pour la communication inter-tâches (limité aux petites données)
+# - E/S fichier requises pour les DataFrames (trop volumineux pour XCom)
+# - Nettoyage manuel des fichiers temporaires
+# - **context pour accéder aux métadonnées Airflow
 #
-# NOTE: This file is for demonstration purposes. In production, you would
-# place this in your Airflow DAGs folder.
+# NOTE : Ce fichier est à des fins de démonstration. En production, vous
+# placeriez ce fichier dans votre dossier DAGs d'Airflow.
 #
-# Key pain points shown:
-# - XCom push/pull everywhere
-# - Must save DataFrames to disk between tasks
-# - Manual temp file management
-# - Verbose task definitions with PythonOperator
+# Points de friction clés montrés :
+# - XCom push/pull partout
+# - Obligation de sauvegarder les DataFrames sur disque entre les tâches
+# - Gestion manuelle des fichiers temporaires
+# - Définitions de tâches verbeuses avec PythonOperator
 # =============================================================================
 
 from datetime import datetime, timedelta
@@ -36,20 +36,20 @@ import tempfile
 
 # ---------------------------------------------------------------------------
 # Configuration
-# Defaults to Docker-hosted MLflow server (start with: cd docker && docker-compose up -d)
+# Par défaut, utilise le serveur MLflow Docker (démarrer avec : cd docker && docker-compose up -d)
 # ---------------------------------------------------------------------------
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 EXPERIMENT_NAME = "customer-churn-airflow"
-MODEL_NAME = "churn-predictor-airflow"  # For model registry
+MODEL_NAME = "churn-predictor-airflow"  # Pour le registre de modèles
 
-# Get project root (parent of pipelines/examples/)
+# Obtenir la racine du projet (parent de pipelines/examples/)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
 OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_airflow.csv")
 INFERENCE_OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_airflow_inference.csv")
 RANDOM_SEED = 42
 
-# Feature columns used for training
+# Colonnes de features utilisées pour l'entraînement
 FEATURE_COLS = [
     'recency_days', 'frequency', 'monetary_value', 'avg_order_value',
     'days_since_signup', 'total_orders', 'support_tickets', 'age',
@@ -59,26 +59,26 @@ FEATURE_COLS = [
 
 
 # =============================================================================
-# TASK FUNCTIONS
-# Notice: Every function needs **context and must use XCom for communication
+# FONCTIONS DE TÂCHES
+# Note : Chaque fonction nécessite **context et doit utiliser XCom pour la communication
 # =============================================================================
 
 def load_customer_data(**context):
     """
-    Load customer data.
+    Charger les données clients.
 
-    AIRFLOW PAIN POINT: Can't return DataFrames directly!
-    Must save to disk and pass file path via XCom.
+    POINT DE FRICTION AIRFLOW : Impossible de retourner les DataFrames directement !
+    Doit sauvegarder sur disque et passer le chemin du fichier via XCom.
     """
-    print("Loading customer data...")
+    print("Chargement des données clients...")
 
-    # Try loading from CSV first
+    # Essayer de charger depuis CSV d'abord
     if os.path.exists(DATA_PATH):
-        print(f"Loading from {DATA_PATH}")
+        print(f"Chargement depuis {DATA_PATH}")
         df = pd.read_csv(DATA_PATH)
     else:
-        # Generate synthetic data (same as notebooks)
-        print("Generating synthetic customer data...")
+        # Générer des données synthétiques (identique aux notebooks)
+        print("Génération de données clients synthétiques...")
         np.random.seed(RANDOM_SEED)
         n_customers = 5000
 
@@ -94,7 +94,7 @@ def load_customer_data(**context):
             'age': np.random.randint(18, 70, n_customers),
         })
 
-        # Create target variable (churn)
+        # Créer la variable cible (churn)
         churn_prob = 1 / (1 + np.exp(-(
             0.02 * df['recency_days'] -
             0.1 * df['frequency'] -
@@ -104,85 +104,85 @@ def load_customer_data(**context):
         )))
         df['churned'] = (np.random.random(n_customers) < churn_prob).astype(int)
 
-    print(f"Loaded {len(df)} customers")
+    print(f"{len(df)} clients chargés")
 
-    # ❌ AIRFLOW: Can't return DataFrame - must save to disk!
+    # ❌ AIRFLOW : Impossible de retourner le DataFrame - doit sauvegarder sur disque !
     temp_dir = tempfile.gettempdir()
     temp_path = os.path.join(temp_dir, f"customer_data_{context['run_id']}.parquet")
     df.to_parquet(temp_path)
 
-    # ❌ AIRFLOW: Must use XCom to pass data between tasks
+    # ❌ AIRFLOW : Doit utiliser XCom pour passer les données entre les tâches
     context['ti'].xcom_push(key='data_path', value=temp_path)
     context['ti'].xcom_push(key='row_count', value=len(df))
 
 
 def engineer_features(**context):
     """
-    Create additional features.
+    Créer des features supplémentaires.
 
-    AIRFLOW PAIN POINT: Must read from disk, then write back to disk!
+    POINT DE FRICTION AIRFLOW : Doit lire depuis le disque, puis réécrire sur disque !
     """
-    print("Engineering features...")
+    print("Ingénierie des features...")
 
-    # ❌ AIRFLOW: Pull file path from XCom
+    # ❌ AIRFLOW : Récupérer le chemin du fichier depuis XCom
     ti = context['ti']
     data_path = ti.xcom_pull(key='data_path', task_ids='load_data')
 
-    # ❌ AIRFLOW: Load from disk
+    # ❌ AIRFLOW : Charger depuis le disque
     df = pd.read_parquet(data_path)
 
-    # Feature engineering (same logic as other pipelines)
+    # Ingénierie des features (même logique que les autres pipelines)
     df['recency_frequency_ratio'] = df['recency_days'] / (df['frequency'] + 1)
     df['monetary_per_order'] = df['monetary_value'] / (df['total_orders'] + 1)
     df['order_frequency'] = df['total_orders'] / (df['days_since_signup'] + 1)
     df['support_per_order'] = df['support_tickets'] / (df['total_orders'] + 1)
 
-    # RFM score
+    # Score RFM
     df['r_score'] = pd.qcut(df['recency_days'], q=5, labels=[5, 4, 3, 2, 1]).astype(int)
     df['f_score'] = pd.qcut(df['frequency'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
     df['m_score'] = pd.qcut(df['monetary_value'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
     df['rfm_score'] = df['r_score'] + df['f_score'] + df['m_score']
 
-    print(f"Engineered features. Shape: {df.shape}")
+    print(f"Features créées. Shape : {df.shape}")
 
-    # ❌ AIRFLOW: Save to new temp file
+    # ❌ AIRFLOW : Sauvegarder dans un nouveau fichier temporaire
     temp_dir = tempfile.gettempdir()
     features_path = os.path.join(temp_dir, f"features_{context['run_id']}.parquet")
     df.to_parquet(features_path)
 
-    # ❌ AIRFLOW: Push path via XCom
+    # ❌ AIRFLOW : Pousser le chemin via XCom
     ti.xcom_push(key='features_path', value=features_path)
 
 
 def train_model(**context):
     """
-    Train Random Forest classifier with MLflow tracking.
+    Entraîner le classifieur Random Forest avec tracking MLflow.
 
-    AIRFLOW PAIN POINT: Must pickle model to disk!
+    POINT DE FRICTION AIRFLOW : Doit sérialiser (pickle) le modèle sur disque !
     """
-    print("Training model...")
+    print("Entraînement du modèle...")
 
     ti = context['ti']
     features_path = ti.xcom_pull(key='features_path', task_ids='engineer_features')
 
-    # ❌ AIRFLOW: Load features from disk
+    # ❌ AIRFLOW : Charger les features depuis le disque
     df = pd.read_parquet(features_path)
 
-    # Prepare data
+    # Préparer les données
     X = df[FEATURE_COLS]
     y = df['churned']
 
-    # Train/test split
+    # Séparation train/test
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=RANDOM_SEED, stratify=y
     )
 
-    # Configure MLflow
+    # Configurer MLflow
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name=f"airflow-{context['ds']}") as run:
-        # Model hyperparameters
+        # Hyperparamètres du modèle
         params = {
             "n_estimators": 200,
             "max_depth": 10,
@@ -190,65 +190,65 @@ def train_model(**context):
             "random_state": RANDOM_SEED
         }
 
-        # Train model
+        # Entraîner le modèle
         model = RandomForestClassifier(**params, n_jobs=-1)
         model.fit(X_train, y_train)
 
-        # Log to MLflow
+        # Logger dans MLflow
         mlflow.log_params(params)
         mlflow.log_param("orchestrator", "airflow")
         mlflow.log_param("n_features", len(FEATURE_COLS))
         mlflow.log_param("training_samples", len(X_train))
 
-        # Log model artifact
+        # Logger l'artefact du modèle
         mlflow.sklearn.log_model(model, "model")
 
         mlflow_run_id = run.info.run_id
 
-    # ❌ AIRFLOW: Save model to temp file (can't pass via XCom - too large)
+    # ❌ AIRFLOW : Sauvegarder le modèle dans un fichier temp (impossible via XCom - trop volumineux)
     temp_dir = tempfile.gettempdir()
     model_path = os.path.join(temp_dir, f"model_{context['run_id']}.pkl")
     with open(model_path, 'wb') as f:
         pickle.dump(model, f)
 
-    # ❌ AIRFLOW: Also save test data for evaluation
+    # ❌ AIRFLOW : Sauvegarder aussi les données de test pour l'évaluation
     test_data_path = os.path.join(temp_dir, f"test_data_{context['run_id']}.parquet")
     test_df = pd.DataFrame(X_test)
     test_df['churned'] = y_test.values
     test_df.to_parquet(test_data_path)
 
-    # ❌ AIRFLOW: Push all paths via XCom
+    # ❌ AIRFLOW : Pousser tous les chemins via XCom
     ti.xcom_push(key='model_path', value=model_path)
     ti.xcom_push(key='mlflow_run_id', value=mlflow_run_id)
     ti.xcom_push(key='test_data_path', value=test_data_path)
 
-    print(f"Model trained. MLflow run: {mlflow_run_id}")
+    print(f"Modèle entraîné. MLflow run : {mlflow_run_id}")
 
 
 def evaluate_model(**context):
     """
-    Evaluate model performance and log metrics to MLflow.
+    Évaluer les performances du modèle et logger les métriques dans MLflow.
     """
-    print("Evaluating model...")
+    print("Évaluation du modèle...")
 
     ti = context['ti']
     model_path = ti.xcom_pull(key='model_path', task_ids='train_model')
     test_data_path = ti.xcom_pull(key='test_data_path', task_ids='train_model')
     mlflow_run_id = ti.xcom_pull(key='mlflow_run_id', task_ids='train_model')
 
-    # ❌ AIRFLOW: Load model from disk
+    # ❌ AIRFLOW : Charger le modèle depuis le disque
     with open(model_path, 'rb') as f:
         model = pickle.load(f)
 
-    # ❌ AIRFLOW: Load test data from disk
+    # ❌ AIRFLOW : Charger les données de test depuis le disque
     test_df = pd.read_parquet(test_data_path)
     y_test = test_df['churned']
     X_test = test_df.drop(columns=['churned'])
 
-    # Predictions
+    # Prédictions
     y_pred = model.predict(X_test)
 
-    # Calculate metrics
+    # Calculer les métriques
     metrics = {
         'accuracy': accuracy_score(y_test, y_pred),
         'precision': precision_score(y_test, y_pred),
@@ -261,12 +261,12 @@ def evaluate_model(**context):
     print(f"Recall:    {metrics['recall']:.4f}")
     print(f"F1 Score:  {metrics['f1']:.4f}")
 
-    # Log metrics to MLflow
+    # Logger les métriques dans MLflow
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     with mlflow.start_run(run_id=mlflow_run_id):
         mlflow.log_metrics(metrics)
 
-    # ❌ AIRFLOW: Pass metrics via XCom
+    # ❌ AIRFLOW : Passer les métriques via XCom
     ti.xcom_push(key='accuracy', value=metrics['accuracy'])
     ti.xcom_push(key='precision', value=metrics['precision'])
     ti.xcom_push(key='recall', value=metrics['recall'])
@@ -275,28 +275,28 @@ def evaluate_model(**context):
 
 def generate_predictions(**context):
     """
-    Generate churn predictions for all customers.
+    Générer les prédictions de churn pour tous les clients.
     """
-    print("Generating predictions...")
+    print("Génération des prédictions...")
 
     ti = context['ti']
     model_path = ti.xcom_pull(key='model_path', task_ids='train_model')
     features_path = ti.xcom_pull(key='features_path', task_ids='engineer_features')
 
-    # ❌ AIRFLOW: Load model from disk
+    # ❌ AIRFLOW : Charger le modèle depuis le disque
     with open(model_path, 'rb') as f:
         model = pickle.load(f)
 
-    # ❌ AIRFLOW: Load features from disk
+    # ❌ AIRFLOW : Charger les features depuis le disque
     df = pd.read_parquet(features_path)
 
     X = df[FEATURE_COLS]
 
-    # Generate predictions
+    # Générer les prédictions
     churn_probability = model.predict_proba(X)[:, 1]
     churn_predicted = model.predict(X)
 
-    # Create results dataframe
+    # Créer le dataframe des résultats
     predictions = pd.DataFrame({
         'customer_id': df['customer_id'],
         'churn_probability': churn_probability,
@@ -304,7 +304,7 @@ def generate_predictions(**context):
         'predicted_at': datetime.now()
     })
 
-    # ❌ AIRFLOW: Save predictions to temp file
+    # ❌ AIRFLOW : Sauvegarder les prédictions dans un fichier temporaire
     temp_dir = tempfile.gettempdir()
     predictions_path = os.path.join(temp_dir, f"predictions_{context['run_id']}.parquet")
     predictions.to_parquet(predictions_path)
@@ -312,37 +312,37 @@ def generate_predictions(**context):
     ti.xcom_push(key='predictions_path', value=predictions_path)
     ti.xcom_push(key='prediction_count', value=len(predictions))
 
-    print(f"Generated predictions for {len(predictions)} customers")
+    print(f"Prédictions générées pour {len(predictions)} clients")
 
 
 def save_predictions(**context):
     """
-    Save predictions to local CSV file.
+    Sauvegarder les prédictions dans un fichier CSV local.
     """
-    print(f"Saving predictions to {OUTPUT_PATH}...")
+    print(f"Sauvegarde des prédictions vers {OUTPUT_PATH}...")
 
     ti = context['ti']
     predictions_path = ti.xcom_pull(key='predictions_path', task_ids='generate_predictions')
 
-    # ❌ AIRFLOW: Load predictions from disk
+    # ❌ AIRFLOW : Charger les prédictions depuis le disque
     predictions = pd.read_parquet(predictions_path)
 
-    # Ensure output directory exists
+    # S'assurer que le répertoire de sortie existe
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
-    # Save to CSV
+    # Sauvegarder en CSV
     predictions.to_csv(OUTPUT_PATH, index=False)
 
-    print(f"Saved {len(predictions)} predictions to {OUTPUT_PATH}")
+    print(f"{len(predictions)} prédictions sauvegardées vers {OUTPUT_PATH}")
 
 
 def register_model(**context):
     """
-    Register trained model to MLflow Model Registry.
+    Enregistrer le modèle entraîné dans le MLflow Model Registry.
 
-    This allows the inference pipeline to load by name.
+    Cela permet au pipeline d'inférence de charger par nom.
     """
-    print(f"Registering model to registry: {MODEL_NAME}")
+    print(f"Enregistrement du modèle dans le registre : {MODEL_NAME}")
 
     ti = context['ti']
     mlflow_run_id = ti.xcom_pull(key='mlflow_run_id', task_ids='train_model')
@@ -351,10 +351,10 @@ def register_model(**context):
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     model_uri = f"runs:/{mlflow_run_id}/model"
 
-    # Register model
+    # Enregistrer le modèle
     model_version = mlflow.register_model(model_uri, MODEL_NAME)
 
-    print(f"Registered {MODEL_NAME} version {model_version.version}")
+    print(f"Enregistré {MODEL_NAME} version {model_version.version}")
     print(f"Accuracy: {accuracy:.4f}")
 
     ti.xcom_push(key='model_version', value=model_version.version)
@@ -362,15 +362,15 @@ def register_model(**context):
 
 def cleanup_temp_files(**context):
     """
-    Clean up temporary files.
+    Nettoyer les fichiers temporaires.
 
-    AIRFLOW PAIN POINT: Must manually clean up all temp files!
+    POINT DE FRICTION AIRFLOW : Doit nettoyer manuellement tous les fichiers temporaires !
     """
-    print("Cleaning up temporary files...")
+    print("Nettoyage des fichiers temporaires...")
 
     ti = context['ti']
 
-    # Get all temp file paths from training pipeline
+    # Récupérer tous les chemins des fichiers temporaires du pipeline d'entraînement
     paths_to_delete = [
         ti.xcom_pull(key='data_path', task_ids='load_data'),
         ti.xcom_pull(key='features_path', task_ids='engineer_features'),
@@ -379,31 +379,31 @@ def cleanup_temp_files(**context):
         ti.xcom_pull(key='predictions_path', task_ids='generate_predictions')
     ]
 
-    # Delete files
+    # Supprimer les fichiers
     for path in paths_to_delete:
         if path and os.path.exists(path):
             os.remove(path)
-            print(f"Deleted {path}")
+            print(f"Supprimé {path}")
 
-    print("Cleanup complete!")
+    print("Nettoyage terminé !")
 
 
 # =============================================================================
-# INFERENCE TASK FUNCTIONS
+# FONCTIONS DE TÂCHES D'INFÉRENCE
 # =============================================================================
 
 def load_inference_data(**context):
     """
-    Load customer data for inference.
+    Charger les données clients pour l'inférence.
 
-    In production, this would load NEW customers to score.
+    En production, cela chargerait les NOUVEAUX clients à scorer.
     """
-    print("Loading customer data for inference...")
+    print("Chargement des données clients pour l'inférence...")
 
     if os.path.exists(DATA_PATH):
         df = pd.read_csv(DATA_PATH)
     else:
-        # Generate synthetic data
+        # Générer des données synthétiques
         np.random.seed(RANDOM_SEED + 1)
         n_customers = 1000
 
@@ -419,9 +419,9 @@ def load_inference_data(**context):
             'age': np.random.randint(18, 70, n_customers),
         })
 
-    print(f"Loaded {len(df)} customers for inference")
+    print(f"{len(df)} clients chargés pour l'inférence")
 
-    # ❌ AIRFLOW: Save to disk
+    # ❌ AIRFLOW : Sauvegarder sur disque
     temp_dir = tempfile.gettempdir()
     temp_path = os.path.join(temp_dir, f"inference_data_{context['run_id']}.parquet")
     df.to_parquet(temp_path)
@@ -432,16 +432,16 @@ def load_inference_data(**context):
 
 def engineer_inference_features(**context):
     """
-    Engineer features for inference data.
+    Créer les features pour les données d'inférence.
     """
-    print("Engineering features for inference...")
+    print("Ingénierie des features pour l'inférence...")
 
     ti = context['ti']
     data_path = ti.xcom_pull(key='inference_data_path', task_ids='load_inference_data')
 
     df = pd.read_parquet(data_path)
 
-    # Same feature engineering as training
+    # Même ingénierie des features que l'entraînement
     df['recency_frequency_ratio'] = df['recency_days'] / (df['frequency'] + 1)
     df['monetary_per_order'] = df['monetary_value'] / (df['total_orders'] + 1)
     df['order_frequency'] = df['total_orders'] / (df['days_since_signup'] + 1)
@@ -452,9 +452,9 @@ def engineer_inference_features(**context):
     df['m_score'] = pd.qcut(df['monetary_value'].rank(method='first'), q=5, labels=[1, 2, 3, 4, 5]).astype(int)
     df['rfm_score'] = df['r_score'] + df['f_score'] + df['m_score']
 
-    print(f"Inference features shape: {df.shape}")
+    print(f"Shape des features d'inférence : {df.shape}")
 
-    # ❌ AIRFLOW: Save to disk
+    # ❌ AIRFLOW : Sauvegarder sur disque
     temp_dir = tempfile.gettempdir()
     features_path = os.path.join(temp_dir, f"inference_features_{context['run_id']}.parquet")
     df.to_parquet(features_path)
@@ -464,30 +464,30 @@ def engineer_inference_features(**context):
 
 def load_model_from_registry(**context):
     """
-    Load model from MLflow Model Registry.
+    Charger le modèle depuis le MLflow Model Registry.
 
-    This is the production pattern - load by name, not by run_id.
+    C'est le pattern de production - charger par nom, pas par run_id.
     """
-    print(f"Loading model {MODEL_NAME}/latest from registry...")
+    print(f"Chargement du modèle {MODEL_NAME}/latest depuis le registre...")
 
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     model_uri = f"models:/{MODEL_NAME}/latest"
 
     try:
         model = mlflow.sklearn.load_model(model_uri)
-        # Get version info
+        # Récupérer les infos de version
         client = mlflow.tracking.MlflowClient()
         latest_version = client.get_latest_versions(MODEL_NAME, stages=["None"])[0]
         version = latest_version.version
     except Exception as e:
         raise RuntimeError(
-            f"Could not load model '{MODEL_NAME}' from registry. "
-            f"Run training pipeline first. Error: {e}"
+            f"Impossible de charger le modèle '{MODEL_NAME}' depuis le registre. "
+            f"Exécutez d'abord le pipeline d'entraînement. Erreur : {e}"
         )
 
-    print(f"Loaded model version {version}")
+    print(f"Modèle version {version} chargé")
 
-    # ❌ AIRFLOW: Save model to disk
+    # ❌ AIRFLOW : Sauvegarder le modèle sur disque
     temp_dir = tempfile.gettempdir()
     model_path = os.path.join(temp_dir, f"inference_model_{context['run_id']}.pkl")
     with open(model_path, 'wb') as f:
@@ -499,24 +499,24 @@ def load_model_from_registry(**context):
 
 def run_batch_inference(**context):
     """
-    Run batch inference using loaded model.
+    Exécuter l'inférence en batch avec le modèle chargé.
     """
-    print("Running batch inference...")
+    print("Exécution de l'inférence en batch...")
 
     ti = context['ti']
     model_path = ti.xcom_pull(key='inference_model_path', task_ids='load_model_from_registry')
     features_path = ti.xcom_pull(key='inference_features_path', task_ids='engineer_inference_features')
     model_version = ti.xcom_pull(key='loaded_model_version', task_ids='load_model_from_registry')
 
-    # Load model
+    # Charger le modèle
     with open(model_path, 'rb') as f:
         model = pickle.load(f)
 
-    # Load features
+    # Charger les features
     df = pd.read_parquet(features_path)
     X = df[FEATURE_COLS]
 
-    # Generate predictions
+    # Générer les prédictions
     churn_probability = model.predict_proba(X)[:, 1]
     churn_predicted = model.predict(X)
 
@@ -529,9 +529,9 @@ def run_batch_inference(**context):
     })
 
     high_risk = (churn_probability > 0.7).sum()
-    print(f"Generated {len(predictions)} predictions ({high_risk} high-risk)")
+    print(f"{len(predictions)} prédictions générées ({high_risk} à haut risque)")
 
-    # ❌ AIRFLOW: Save to disk
+    # ❌ AIRFLOW : Sauvegarder sur disque
     temp_dir = tempfile.gettempdir()
     predictions_path = os.path.join(temp_dir, f"inference_predictions_{context['run_id']}.parquet")
     predictions.to_parquet(predictions_path)
@@ -543,9 +543,9 @@ def run_batch_inference(**context):
 
 def save_inference_predictions(**context):
     """
-    Save inference predictions to CSV.
+    Sauvegarder les prédictions d'inférence en CSV.
     """
-    print(f"Saving inference predictions to {INFERENCE_OUTPUT_PATH}...")
+    print(f"Sauvegarde des prédictions d'inférence vers {INFERENCE_OUTPUT_PATH}...")
 
     ti = context['ti']
     predictions_path = ti.xcom_pull(key='inference_predictions_path', task_ids='run_batch_inference')
@@ -555,16 +555,16 @@ def save_inference_predictions(**context):
     os.makedirs(os.path.dirname(INFERENCE_OUTPUT_PATH), exist_ok=True)
     predictions.to_csv(INFERENCE_OUTPUT_PATH, index=False)
 
-    print(f"Saved {len(predictions)} predictions")
+    print(f"{len(predictions)} prédictions sauvegardées")
 
     ti.xcom_push(key='inference_output_path', value=INFERENCE_OUTPUT_PATH)
 
 
 def cleanup_inference_temp_files(**context):
     """
-    Clean up inference temporary files.
+    Nettoyer les fichiers temporaires d'inférence.
     """
-    print("Cleaning up inference temporary files...")
+    print("Nettoyage des fichiers temporaires d'inférence...")
 
     ti = context['ti']
 
@@ -578,14 +578,14 @@ def cleanup_inference_temp_files(**context):
     for path in paths_to_delete:
         if path and os.path.exists(path):
             os.remove(path)
-            print(f"Deleted {path}")
+            print(f"Supprimé {path}")
 
-    print("Inference cleanup complete!")
+    print("Nettoyage d'inférence terminé !")
 
 
 # =============================================================================
-# DAG DEFINITION
-# Notice all the boilerplate configuration required
+# DÉFINITION DU DAG
+# Notez toute la configuration boilerplate requise
 # =============================================================================
 
 default_args = {
@@ -600,15 +600,15 @@ default_args = {
 dag = DAG(
     'customer_churn_prediction',
     default_args=default_args,
-    description='Daily customer churn prediction pipeline',
-    schedule_interval='0 2 * * *',  # 2 AM daily
+    description='Pipeline quotidien de prédiction du churn client',
+    schedule_interval='0 2 * * *',  # 2h du matin quotidiennement
     catchup=False,
     tags=['ml', 'churn', 'prediction'],
 )
 
 # =============================================================================
-# TASK DEFINITIONS
-# Notice: Must wrap each function in PythonOperator
+# DÉFINITIONS DES TÂCHES
+# Note : Doit encapsuler chaque fonction dans un PythonOperator
 # =============================================================================
 
 load_data_task = PythonOperator(
@@ -656,15 +656,15 @@ register_model_task = PythonOperator(
 cleanup_task = PythonOperator(
     task_id='cleanup',
     python_callable=cleanup_temp_files,
-    trigger_rule='all_done',  # Run even if previous tasks fail
+    trigger_rule='all_done',  # Exécuter même si les tâches précédentes échouent
     dag=dag,
 )
 
 # =============================================================================
-# TASK DEPENDENCIES - TRAINING DAG
+# DÉPENDANCES DES TÂCHES - DAG D'ENTRAÎNEMENT
 # =============================================================================
 
-# Define the execution order
+# Définir l'ordre d'exécution
 load_data_task >> engineer_features_task >> train_model_task >> evaluate_model_task
 evaluate_model_task >> register_model_task
 train_model_task >> generate_predictions_task >> save_predictions_task
@@ -672,7 +672,7 @@ train_model_task >> generate_predictions_task >> save_predictions_task
 
 
 # =============================================================================
-# INFERENCE DAG DEFINITION
+# DÉFINITION DU DAG D'INFÉRENCE
 # =============================================================================
 
 inference_default_args = {
@@ -687,14 +687,14 @@ inference_default_args = {
 inference_dag = DAG(
     'customer_churn_inference',
     default_args=inference_default_args,
-    description='Daily customer churn inference pipeline (loads model from registry)',
-    schedule_interval='0 6 * * *',  # 6 AM daily (after training at 2 AM)
+    description='Pipeline quotidien d\'inférence du churn client (charge le modèle depuis le registre)',
+    schedule_interval='0 6 * * *',  # 6h du matin quotidiennement (après l'entraînement à 2h)
     catchup=False,
     tags=['ml', 'churn', 'inference'],
 )
 
 # =============================================================================
-# INFERENCE TASK DEFINITIONS
+# DÉFINITIONS DES TÂCHES D'INFÉRENCE
 # =============================================================================
 
 load_inference_data_task = PythonOperator(
@@ -735,17 +735,17 @@ inference_cleanup_task = PythonOperator(
 )
 
 # =============================================================================
-# TASK DEPENDENCIES - INFERENCE DAG
+# DÉPENDANCES DES TÂCHES - DAG D'INFÉRENCE
 # =============================================================================
 
-# Data prep and model loading can run in parallel
+# La préparation des données et le chargement du modèle peuvent s'exécuter en parallèle
 load_inference_data_task >> engineer_inference_features_task
 [engineer_inference_features_task, load_model_task] >> run_inference_task
 run_inference_task >> save_inference_task >> inference_cleanup_task
 
 
 # =============================================================================
-# STANDALONE EXECUTION (for testing without Airflow)
+# EXÉCUTION STANDALONE (pour tester sans Airflow)
 # =============================================================================
 
 if __name__ == "__main__":
@@ -753,12 +753,12 @@ if __name__ == "__main__":
     import uuid
 
     print("=" * 60)
-    print("Customer Churn Prediction Pipeline (Airflow)")
+    print("Pipeline de Prédiction du Churn Client (Airflow)")
     print("=" * 60)
-    print("\nNOTE: This file is designed to run as an Airflow DAG.")
-    print("For standalone testing, we simulate the pipeline execution.\n")
+    print("\nNOTE : Ce fichier est conçu pour s'exécuter comme un DAG Airflow.")
+    print("Pour les tests standalone, nous simulons l'exécution du pipeline.\n")
 
-    # Create a mock context for standalone testing
+    # Créer un contexte mock pour les tests standalone
     run_id = str(uuid.uuid4())[:8]
 
     class MockTaskInstance:
@@ -781,46 +781,46 @@ if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "full"
 
     if mode == "train":
-        print("Mode: TRAINING ONLY")
+        print("Mode : ENTRAÎNEMENT UNIQUEMENT")
         print("=" * 60)
 
-        print("1. Loading data...")
+        print("1. Chargement des données...")
         load_customer_data(**mock_context)
 
-        print("\n2. Engineering features...")
+        print("\n2. Ingénierie des features...")
         engineer_features(**mock_context)
 
-        print("\n3. Training model...")
+        print("\n3. Entraînement du modèle...")
         train_model(**mock_context)
 
-        print("\n4. Evaluating model...")
+        print("\n4. Évaluation du modèle...")
         evaluate_model(**mock_context)
 
-        print("\n5. Registering model...")
+        print("\n5. Enregistrement du modèle...")
         register_model(**mock_context)
 
-        print("\n6. Generating predictions...")
+        print("\n6. Génération des prédictions...")
         generate_predictions(**mock_context)
 
-        print("\n7. Saving predictions...")
+        print("\n7. Sauvegarde des prédictions...")
         save_predictions(**mock_context)
 
-        print("\n8. Cleaning up...")
+        print("\n8. Nettoyage...")
         cleanup_temp_files(**mock_context)
 
         print("\n" + "=" * 60)
-        print("Training completed!")
+        print("Entraînement terminé !")
         print("=" * 60)
-        print(f"Predictions saved to: {OUTPUT_PATH}")
-        print(f"MLflow run ID: {ti.xcom_data.get('mlflow_run_id', 'N/A')}")
-        print(f"Model version: {ti.xcom_data.get('model_version', 'N/A')}")
-        print(f"Accuracy: {ti.xcom_data.get('accuracy', 0):.4f}")
+        print(f"Prédictions sauvegardées vers : {OUTPUT_PATH}")
+        print(f"MLflow run ID : {ti.xcom_data.get('mlflow_run_id', 'N/A')}")
+        print(f"Version du modèle : {ti.xcom_data.get('model_version', 'N/A')}")
+        print(f"Accuracy : {ti.xcom_data.get('accuracy', 0):.4f}")
 
     elif mode == "inference":
-        print("Mode: INFERENCE ONLY")
+        print("Mode : INFÉRENCE UNIQUEMENT")
         print("=" * 60)
 
-        # Use a fresh context for inference
+        # Utiliser un nouveau contexte pour l'inférence
         inference_ti = MockTaskInstance()
         inference_context = {
             'ti': inference_ti,
@@ -828,68 +828,68 @@ if __name__ == "__main__":
             'ds': datetime.now().strftime('%Y-%m-%d')
         }
 
-        print("1. Loading inference data...")
+        print("1. Chargement des données d'inférence...")
         load_inference_data(**inference_context)
 
-        print("\n2. Engineering inference features...")
+        print("\n2. Ingénierie des features d'inférence...")
         engineer_inference_features(**inference_context)
 
-        print("\n3. Loading model from registry...")
+        print("\n3. Chargement du modèle depuis le registre...")
         load_model_from_registry(**inference_context)
 
-        print("\n4. Running batch inference...")
+        print("\n4. Exécution de l'inférence en batch...")
         run_batch_inference(**inference_context)
 
-        print("\n5. Saving inference predictions...")
+        print("\n5. Sauvegarde des prédictions d'inférence...")
         save_inference_predictions(**inference_context)
 
-        print("\n6. Cleaning up...")
+        print("\n6. Nettoyage...")
         cleanup_inference_temp_files(**inference_context)
 
         print("\n" + "=" * 60)
-        print("Inference completed!")
+        print("Inférence terminée !")
         print("=" * 60)
-        print(f"Predictions saved to: {INFERENCE_OUTPUT_PATH}")
-        print(f"Model version: {inference_ti.xcom_data.get('loaded_model_version', 'N/A')}")
-        print(f"Predictions: {inference_ti.xcom_data.get('inference_prediction_count', 0)}")
-        print(f"High-risk: {inference_ti.xcom_data.get('inference_high_risk_count', 0)}")
+        print(f"Prédictions sauvegardées vers : {INFERENCE_OUTPUT_PATH}")
+        print(f"Version du modèle : {inference_ti.xcom_data.get('loaded_model_version', 'N/A')}")
+        print(f"Prédictions : {inference_ti.xcom_data.get('inference_prediction_count', 0)}")
+        print(f"Haut risque : {inference_ti.xcom_data.get('inference_high_risk_count', 0)}")
 
     else:  # full
-        print("Mode: FULL PIPELINE (train + inference)")
+        print("Mode : PIPELINE COMPLET (entraînement + inférence)")
         print("=" * 60)
 
-        # Training phase
+        # Phase d'entraînement
         print("\n" + "=" * 60)
-        print("PHASE 1: TRAINING")
+        print("PHASE 1 : ENTRAÎNEMENT")
         print("=" * 60)
 
-        print("1. Loading data...")
+        print("1. Chargement des données...")
         load_customer_data(**mock_context)
 
-        print("\n2. Engineering features...")
+        print("\n2. Ingénierie des features...")
         engineer_features(**mock_context)
 
-        print("\n3. Training model...")
+        print("\n3. Entraînement du modèle...")
         train_model(**mock_context)
 
-        print("\n4. Evaluating model...")
+        print("\n4. Évaluation du modèle...")
         evaluate_model(**mock_context)
 
-        print("\n5. Registering model...")
+        print("\n5. Enregistrement du modèle...")
         register_model(**mock_context)
 
-        print("\n6. Generating predictions...")
+        print("\n6. Génération des prédictions...")
         generate_predictions(**mock_context)
 
-        print("\n7. Saving predictions...")
+        print("\n7. Sauvegarde des prédictions...")
         save_predictions(**mock_context)
 
-        print("\n8. Cleaning up training files...")
+        print("\n8. Nettoyage des fichiers d'entraînement...")
         cleanup_temp_files(**mock_context)
 
-        # Inference phase
+        # Phase d'inférence
         print("\n" + "=" * 60)
-        print("PHASE 2: INFERENCE")
+        print("PHASE 2 : INFÉRENCE")
         print("=" * 60)
 
         inference_ti = MockTaskInstance()
@@ -899,42 +899,42 @@ if __name__ == "__main__":
             'ds': datetime.now().strftime('%Y-%m-%d')
         }
 
-        print("1. Loading inference data...")
+        print("1. Chargement des données d'inférence...")
         load_inference_data(**inference_context)
 
-        print("\n2. Engineering inference features...")
+        print("\n2. Ingénierie des features d'inférence...")
         engineer_inference_features(**inference_context)
 
-        print("\n3. Loading model from registry...")
+        print("\n3. Chargement du modèle depuis le registre...")
         load_model_from_registry(**inference_context)
 
-        print("\n4. Running batch inference...")
+        print("\n4. Exécution de l'inférence en batch...")
         run_batch_inference(**inference_context)
 
-        print("\n5. Saving inference predictions...")
+        print("\n5. Sauvegarde des prédictions d'inférence...")
         save_inference_predictions(**inference_context)
 
-        print("\n6. Cleaning up inference files...")
+        print("\n6. Nettoyage des fichiers d'inférence...")
         cleanup_inference_temp_files(**inference_context)
 
         print("\n" + "=" * 60)
-        print("Full pipeline completed!")
+        print("Pipeline complet terminé !")
         print("=" * 60)
-        print("\nTRAINING RESULTS:")
-        print(f"  Predictions: {OUTPUT_PATH}")
-        print(f"  MLflow run: {ti.xcom_data.get('mlflow_run_id', 'N/A')}")
-        print(f"  Model version: {ti.xcom_data.get('model_version', 'N/A')}")
-        print(f"  Accuracy: {ti.xcom_data.get('accuracy', 0):.4f}")
-        print("\nINFERENCE RESULTS:")
-        print(f"  Predictions: {INFERENCE_OUTPUT_PATH}")
-        print(f"  Model version: {inference_ti.xcom_data.get('loaded_model_version', 'N/A')}")
-        print(f"  Customers scored: {inference_ti.xcom_data.get('inference_prediction_count', 0)}")
-        print(f"  High-risk: {inference_ti.xcom_data.get('inference_high_risk_count', 0)}")
+        print("\nRÉSULTATS D'ENTRAÎNEMENT :")
+        print(f"  Prédictions : {OUTPUT_PATH}")
+        print(f"  MLflow run : {ti.xcom_data.get('mlflow_run_id', 'N/A')}")
+        print(f"  Version du modèle : {ti.xcom_data.get('model_version', 'N/A')}")
+        print(f"  Accuracy : {ti.xcom_data.get('accuracy', 0):.4f}")
+        print("\nRÉSULTATS D'INFÉRENCE :")
+        print(f"  Prédictions : {INFERENCE_OUTPUT_PATH}")
+        print(f"  Version du modèle : {inference_ti.xcom_data.get('loaded_model_version', 'N/A')}")
+        print(f"  Clients scorés : {inference_ti.xcom_data.get('inference_prediction_count', 0)}")
+        print(f"  Haut risque : {inference_ti.xcom_data.get('inference_high_risk_count', 0)}")
 
     print("\n" + "=" * 60)
-    print(f"View experiments at: {MLFLOW_TRACKING_URI}")
+    print(f"Voir les expériences sur : {MLFLOW_TRACKING_URI}")
     print("=" * 60)
-    print("\nUsage:")
-    print("  python Airflow_ML_Pipeline.py           # Full pipeline")
-    print("  python Airflow_ML_Pipeline.py train     # Training only")
-    print("  python Airflow_ML_Pipeline.py inference # Inference only")
+    print("\nUtilisation :")
+    print("  python Airflow_ML_Pipeline.py           # Pipeline complet")
+    print("  python Airflow_ML_Pipeline.py train     # Entraînement uniquement")
+    print("  python Airflow_ML_Pipeline.py inference # Inférence uniquement")

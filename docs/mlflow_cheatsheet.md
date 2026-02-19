@@ -1,42 +1,42 @@
-# MLflow Cheatsheet
+# Aide-mémoire MLflow
 
-Quick reference for the workshop. Keep this open while working through the notebooks!
+Référence rapide pour l'atelier. Gardez ceci ouvert pendant que vous travaillez sur les notebooks !
 
 ---
 
-## Setup & Connection
+## Configuration & Connexion
 
 ```python
 import mlflow
 import mlflow.sklearn
 
-# Connect to tracking server
+# Se connecter au serveur de tracking
 mlflow.set_tracking_uri("http://localhost:5000")
 
-# Create/select experiment
+# Créer/sélectionner une expérience
 mlflow.set_experiment("my-experiment")
 ```
 
 ---
 
-## Basic Run Structure
+## Structure de Base d'un Run
 
 ```python
 with mlflow.start_run(run_name="my-run"):
-    # Your training code here
+    # Votre code d'entraînement ici
     mlflow.log_param("key", value)
     mlflow.log_metric("accuracy", 0.95)
 ```
 
 ---
 
-## Logging Parameters
+## Logger les Paramètres
 
 ```python
-# Single parameter
+# Paramètre unique
 mlflow.log_param("learning_rate", 0.01)
 
-# Multiple parameters (recommended)
+# Plusieurs paramètres (recommandé)
 mlflow.log_params({
     "n_estimators": 100,
     "max_depth": 10,
@@ -46,13 +46,13 @@ mlflow.log_params({
 
 ---
 
-## Logging Metrics
+## Logger les Métriques
 
 ```python
-# Single metric
+# Métrique unique
 mlflow.log_metric("accuracy", 0.95)
 
-# Multiple metrics (recommended)
+# Plusieurs métriques (recommandé)
 mlflow.log_metrics({
     "accuracy": 0.95,
     "precision": 0.92,
@@ -60,29 +60,29 @@ mlflow.log_metrics({
     "f1": 0.90
 })
 
-# Metric with step (for training curves)
+# Métrique avec step (pour les courbes d'entraînement)
 mlflow.log_metric("loss", 0.5, step=1)
 mlflow.log_metric("loss", 0.3, step=2)
 ```
 
 ---
 
-## Logging Models
+## Logger les Modèles
 
 ```python
-# Sklearn model
+# Modèle sklearn
 mlflow.sklearn.log_model(model, name="model")
 
-# Load model later
+# Charger le modèle plus tard
 loaded_model = mlflow.sklearn.load_model("runs:/<run_id>/model")
 
-# Or from registry
+# Ou depuis le registre
 loaded_model = mlflow.sklearn.load_model("models:/model-name/latest")
 ```
 
 ---
 
-## Logging Artifacts
+## Logger les Artefacts
 
 ### Figures (matplotlib)
 ```python
@@ -92,7 +92,7 @@ mlflow.log_figure(fig, "plot.png")
 plt.close()
 ```
 
-### Files (pickles, CSVs, etc.)
+### Fichiers (pickles, CSVs, etc.)
 ```python
 import tempfile
 import os
@@ -100,9 +100,9 @@ import os
 with tempfile.TemporaryDirectory() as tmpdir:
     path = os.path.join(tmpdir, "data.csv")
     df.to_csv(path)
-    mlflow.log_artifact(path)  # Root of artifacts
-    # OR
-    mlflow.log_artifact(path, artifact_path="data")  # In subfolder
+    mlflow.log_artifact(path)  # Racine des artefacts
+    # OU
+    mlflow.log_artifact(path, artifact_path="data")  # Dans un sous-dossier
 ```
 
 ---
@@ -110,10 +110,10 @@ with tempfile.TemporaryDirectory() as tmpdir:
 ## Tags
 
 ```python
-# Single tag
+# Tag unique
 mlflow.set_tag("author", "your-name")
 
-# Multiple tags
+# Plusieurs tags
 mlflow.set_tags({
     "author": "your-name",
     "model_type": "RandomForest",
@@ -123,7 +123,7 @@ mlflow.set_tags({
 
 ---
 
-## Searching Runs
+## Rechercher des Runs
 
 ```python
 from mlflow.tracking import MlflowClient
@@ -131,7 +131,7 @@ from mlflow.tracking import MlflowClient
 client = MlflowClient()
 experiment = client.get_experiment_by_name("my-experiment")
 
-# Find best runs
+# Trouver les meilleurs runs
 runs = client.search_runs(
     experiment_ids=[experiment.experiment_id],
     filter_string="metrics.accuracy > 0.8",
@@ -145,74 +145,74 @@ for run in runs:
 
 ---
 
-## Model Registry
+## Registre de Modèles
 
 ```python
-# Register a model
+# Enregistrer un modèle
 mlflow.register_model(
     model_uri=f"runs:/{run_id}/model",
     name="my-model"
 )
 
-# Load from registry
+# Charger depuis le registre
 model = mlflow.sklearn.load_model("models:/my-model/latest")
-# OR specific version
+# OU version spécifique
 model = mlflow.sklearn.load_model("models:/my-model/1")
 ```
 
 ---
 
-## Autologging (Alternative to Manual)
+## Autologging (Alternative au Manuel)
 
 ```python
-# Enable autolog for sklearn
+# Activer autolog pour sklearn
 mlflow.sklearn.autolog()
 
-# Now just train - MLflow logs everything automatically!
+# Maintenant entraînez simplement - MLflow logge tout automatiquement !
 model = RandomForestClassifier()
 model.fit(X_train, y_train)
 
-# Disable when done
+# Désactiver quand terminé
 mlflow.sklearn.autolog(disable=True)
 ```
 
-**Note**: Autolog metrics are on TRAINING data. Add test metrics manually for fair comparison.
+**Note** : Les métriques d'autolog sont sur les données d'ENTRAÎNEMENT. Ajoutez les métriques de test manuellement pour une comparaison équitable.
 
 ---
 
-## Common Patterns
+## Patterns Courants
 
-### Full Training Run
+### Run d'Entraînement Complet
 ```python
 with mlflow.start_run(run_name="full-example"):
     # Tags
     mlflow.set_tag("author", "workshop")
 
-    # Parameters
+    # Paramètres
     mlflow.log_params({"n_estimators": 100, "max_depth": 10})
 
-    # Train
+    # Entraînement
     model = RandomForestClassifier(n_estimators=100, max_depth=10)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    # Metrics
+    # Métriques
     mlflow.log_metrics({
         "accuracy": accuracy_score(y_test, y_pred),
         "f1": f1_score(y_test, y_pred)
     })
 
-    # Model
+    # Modèle
     mlflow.sklearn.log_model(model, name="model")
 
-    # Plot
+    # Graphique
     fig, ax = plt.subplots()
-    # ... create plot ...
+    # ... créer le graphique ...
     mlflow.log_figure(fig, "confusion_matrix.png")
     plt.close()
 ```
 
-### Save Preprocessing (Scaler)
+### Sauvegarder le Prétraitement (Scaler)
 ```python
 import joblib
 import tempfile
@@ -222,7 +222,7 @@ with mlflow.start_run():
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # Save scaler
+    # Sauvegarder le scaler
     with tempfile.TemporaryDirectory() as tmpdir:
         path = os.path.join(tmpdir, "scaler.pkl")
         joblib.dump(scaler, path)
@@ -231,7 +231,7 @@ with mlflow.start_run():
     mlflow.set_tag("requires_scaling", "true")
 ```
 
-### Load Preprocessing Later
+### Charger le Prétraitement Plus Tard
 ```python
 run_id = "your-run-id"
 artifact_path = client.download_artifacts(run_id, "preprocessing/scaler.pkl")
@@ -240,16 +240,16 @@ scaler = joblib.load(artifact_path)
 
 ---
 
-## Quick Debugging
+## Débogage Rapide
 
 ```python
-# Current tracking URI
+# URI de tracking actuel
 print(mlflow.get_tracking_uri())
 
-# Current experiment
+# Expérience actuelle
 print(mlflow.get_experiment_by_name("name"))
 
-# List artifacts for a run
+# Lister les artefacts d'un run
 artifacts = client.list_artifacts(run_id)
 for a in artifacts:
     print(a.path)
@@ -257,47 +257,47 @@ for a in artifacts:
 
 ---
 
-## UI Access
+## Accès à l'Interface
 
-- **MLflow UI**: http://localhost:5000
-- **Experiments**: Left sidebar
-- **Runs**: Click experiment name
-- **Artifacts**: Click run, then "Artifacts" tab
-- **Compare**: Select runs with checkboxes, click "Compare"
-
----
-
-## Key Concepts Summary
-
-| Concept | What it is | Example |
-|---------|-----------|---------|
-| **Experiment** | Group of related runs | "churn-prediction" |
-| **Run** | Single execution | "rf-100-trees" |
-| **Parameter** | Input to model | n_estimators=100 |
-| **Metric** | Output/result | accuracy=0.95 |
-| **Artifact** | File (model, plot) | model.pkl |
-| **Tag** | Metadata | author="me" |
-| **Registry** | Model versioning | "prod-model" v1, v2 |
-| **Projects** | Reproducible code | MLproject file |
+- **Interface MLflow** : http://localhost:5000
+- **Expériences** : Barre latérale gauche
+- **Runs** : Cliquez sur le nom de l'expérience
+- **Artefacts** : Cliquez sur le run, puis onglet "Artifacts"
+- **Comparer** : Sélectionnez les runs avec les cases, cliquez "Compare"
 
 ---
 
-## LLM/GenAI Support (Bonus)
+## Résumé des Concepts Clés
 
-MLflow now supports LLM applications:
+| Concept | Ce que c'est | Exemple |
+|---------|--------------|---------|
+| **Experiment** | Groupe de runs liés | "churn-prediction" |
+| **Run** | Une seule exécution | "rf-100-trees" |
+| **Parameter** | Entrée du modèle | n_estimators=100 |
+| **Metric** | Sortie/résultat | accuracy=0.95 |
+| **Artifact** | Fichier (modèle, graphique) | model.pkl |
+| **Tag** | Métadonnée | author="me" |
+| **Registry** | Versionnage de modèles | "prod-model" v1, v2 |
+| **Projects** | Code reproductible | fichier MLproject |
+
+---
+
+## Support LLM/GenAI (Bonus)
+
+MLflow supporte maintenant les applications LLM :
 
 ```python
-# Trace LLM calls
+# Tracer les appels LLM
 @mlflow.trace
 def chat_with_llm(prompt):
     response = openai_client.chat(prompt)
     return response
 
-# Log LLM model
+# Logger un modèle LLM
 mlflow.openai.log_model(...)
 
-# Evaluate LLM outputs
+# Évaluer les sorties LLM
 mlflow.evaluate(model, data, model_type="text")
 ```
 
-**Use cases**: RAG pipelines, chatbot debugging, agent monitoring
+**Cas d'usage** : Pipelines RAG, débogage de chatbots, monitoring d'agents

@@ -1,21 +1,21 @@
 # =============================================================================
-# MLflow + Orchestrators Workshop - Dependencies
+# Atelier MLflow + Orchestrateurs - Dépendances
 # =============================================================================
 #
-# With uv (recommended):
+# Avec uv (recommandé) :
 #   uv pip install -r requirements.txt
 #
-# With pip:
+# Avec pip :
 #   pip install -r requirements.txt
 #
-# Or use pyproject.toml:
+# Ou utiliser pyproject.toml :
 #   uv sync
-#   uv sync --extra prefect      # Add Prefect
-#   uv sync --extra orchestrators # Add all orchestrators
+#   uv sync --extra prefect      # Ajouter Prefect
+#   uv sync --extra orchestrators # Ajouter tous les orchestrateurs
 #
 # =============================================================================
 
-# Core Data Science
+# Data Science de base
 pandas>=2.0.0
 numpy>=1.24.0
 scikit-learn>=1.3.0
@@ -25,16 +25,16 @@ seaborn>=0.12.0
 # MLflow
 mlflow>=2.9.0
 
-# Orchestrators
+# Orchestrateurs
 prefect>=2.14.0
 dagster>=1.5.0
 dagster-webserver>=1.5.0
 
-# Airflow (optional - heavy, uncomment if needed)
+# Airflow (optionnel - lourd, décommenter si nécessaire)
 # apache-airflow>=2.7.0
 
-# Data formats
+# Formats de données
 pyarrow>=14.0.0
 
-# Jupyter (for VS Code notebooks)
+# Jupyter (pour les notebooks VS Code)
 ipykernel>=6.25.0
