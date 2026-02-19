@@ -1,0 +1,32 @@
+# =============================================================================
+# Prefect Worker Image
+# =============================================================================
+#
+# This runs the Prefect worker that executes flows.
+# The worker connects to the Prefect server and MLflow.
+#
+# Build: docker-compose build prefect-worker
+# Run:   docker-compose up -d
+#
+# =============================================================================
+
+FROM prefecthq/prefect:2-python3.11
+
+WORKDIR /app
+
+# Install ML dependencies
+RUN pip install --no-cache-dir \
+    mlflow \
+    pandas \
+    numpy \
+    scikit-learn \
+    pyarrow
+
+# Copy pipeline code (also mounted as volume for live updates)
+COPY pipelines/ /app/pipelines/
+
+# Working directory for flows
+WORKDIR /app
+
+# Create the work pool on startup, then start the worker
+CMD ["sh", "-c", "prefect work-pool create default-pool --type process 2>/dev/null || true && prefect worker start --pool default-pool --type process"]

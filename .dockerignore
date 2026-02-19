@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+.eggs
+dist
+build
+*.egg
+
+# Virtual environments
+venv
+.venv
+env
+.env
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints
+
+# MLflow local runs (use Docker volume instead)
+mlruns/
+
+# Data outputs (regenerated)
+data/predictions_*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!CLAUDE.md

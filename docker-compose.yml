@@ -1,0 +1,148 @@
+# =============================================================================
+# MLflow + Orchestrators Workshop - Docker Compose
+# =============================================================================
+#
+# This runs the full orchestration stack:
+#   - MLflow: Experiment tracking and model registry
+#   - Prefect: Server + Worker for flow automation
+#   - Dagster: Webserver + Daemon for asset automation (bonus)
+#
+# Usage:
+#   docker-compose up -d                     # MLflow + Prefect (main workshop)
+#   docker-compose --profile dagster up -d   # + Dagster (bonus)
+#   docker-compose down                      # Stop all
+#
+# Access:
+#   - MLflow:  http://localhost:5000 (experiments, models)
+#   - Prefect: http://localhost:4200 (flows, deployments, runs)
+#   - Dagster: http://localhost:3000 (assets, materializations)
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # MLflow Tracking Server
+  # ---------------------------------------------------------------------------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.9.0
+    container_name: workshop-mlflow
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Prefect Server (API + UI)
+  # ---------------------------------------------------------------------------
+  prefect-server:
+    image: prefecthq/prefect:2-python3.11
+    container_name: workshop-prefect-server
+    ports:
+      - "${PREFECT_PORT:-4200}:4200"
+    volumes:
+      - prefect-data:/root/.prefect
+    environment:
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db
+    command: prefect server start --host 0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Prefect Worker (executes flows)
+  # ---------------------------------------------------------------------------
+  prefect-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prefect
+    container_name: workshop-prefect-worker
+    volumes:
+      - ./pipelines:/app/pipelines
+      - ./data:/app/data
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    command: prefect worker start --pool default-pool --type process
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Dagster Webserver (UI) - BONUS
+  # ---------------------------------------------------------------------------
+  dagster-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.dagster
+    container_name: workshop-dagster-webserver
+    ports:
+      - "${DAGSTER_PORT:-3000}:3000"
+    volumes:
+      - ./pipelines:/app/pipelines
+      - ./data:/app/data
+      - dagster-data:/app/dagster_home
+    environment:
+      - DAGSTER_HOME=/app/dagster_home
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    command: dagster-webserver --host 0.0.0.0 --port 3000
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    profiles:
+      - dagster
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Dagster Daemon (executes schedules) - BONUS
+  # ---------------------------------------------------------------------------
+  dagster-daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile.dagster
+    container_name: workshop-dagster-daemon
+    volumes:
+      - ./pipelines:/app/pipelines
+      - ./data:/app/data
+      - dagster-data:/app/dagster_home
+    environment:
+      - DAGSTER_HOME=/app/dagster_home
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    command: dagster-daemon run
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    profiles:
+      - dagster
+    restart: unless-stopped
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  mlflow-data:
+    name: workshop-mlflow-data
+  prefect-data:
+    name: workshop-prefect-data
+  dagster-data:
+    name: workshop-dagster-data
