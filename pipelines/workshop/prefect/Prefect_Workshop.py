@@ -11,6 +11,7 @@
 #   Partie 4 : Flexibilité - Paramètres, sous-flows
 #   Partie 5 : Pipeline Complet - Tout avec MLflow
 #   Partie 6 : AUTOMATISATION - Déployer, planifier, regarder l'exécution !
+#   Partie 7 : NOTIFICATIONS - Alertes Discord/Slack sur échec
 #
 # -----------------------------------------------------------------------------
 # CONFIGURATION
@@ -40,11 +41,23 @@ import mlflow
 import mlflow.sklearn
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, f1_score
+import joblib
+import tempfile
 import time
 import random
 import os
 import asyncio
+
+# Imports pour les notifications (Partie 7)
+# Note : httpx est une dépendance de Prefect, donc déjà installé
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+    print("⚠️ httpx non disponible - les notifications webhook ne fonctionneront pas")
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -501,6 +514,435 @@ def run_single():
 
 
 # =============================================================================
+# PARTIE 7 : NOTIFICATIONS - Alertes Discord/Slack
+# =============================================================================
+#
+# PROBLÈME :
+#   Vous ne voulez pas surveiller vos pipelines 24h/24. Vous voulez être
+#   ALERTÉ quand quelque chose échoue (ou réussit) !
+#
+# SOLUTION :
+#   Prefect supporte les notifications via webhooks : Discord, Slack, Teams, etc.
+#   Recevez un message sur votre serveur Discord quand un flow échoue !
+#
+# =============================================================================
+
+def send_discord_notification(webhook_url: str, message: str, username: str = "Prefect Bot"):
+    """
+    Envoyer une notification Discord via webhook.
+
+    Pour créer un webhook Discord :
+    1. Aller dans les paramètres de votre serveur Discord
+    2. Intégrations > Webhooks > Nouveau Webhook
+    3. Copier l'URL du webhook
+
+    L'URL ressemble à : https://discord.com/api/webhooks/<id>/<token>
+    """
+    if not HTTPX_AVAILABLE:
+        print("⚠️ httpx non disponible - notification non envoyée")
+        return
+
+    payload = {
+        "username": username,
+        "content": message
+    }
+
+    try:
+        response = httpx.post(webhook_url, json=payload)
+        response.raise_for_status()
+        print(f"✅ Notification Discord envoyée")
+    except Exception as e:
+        print(f"❌ Erreur envoi Discord : {e}")
+
+
+def send_slack_notification(webhook_url: str, message: str):
+    """
+    Envoyer une notification Slack via webhook.
+
+    Pour créer un webhook Slack :
+    1. Aller sur https://api.slack.com/apps
+    2. Créer une app > Incoming Webhooks > Activer
+    3. Ajouter à un channel et copier l'URL
+    """
+    if not HTTPX_AVAILABLE:
+        print("⚠️ httpx non disponible - notification non envoyée")
+        return
+
+    payload = {"text": message}
+
+    try:
+        response = httpx.post(webhook_url, json=payload)
+        response.raise_for_status()
+        print(f"✅ Notification Slack envoyée")
+    except Exception as e:
+        print(f"❌ Erreur envoi Slack : {e}")
+
+
+def create_failure_handler(webhook_url: str, service: str = "discord"):
+    """
+    Créer un handler d'échec pour un flow.
+
+    Ce handler sera appelé automatiquement quand le flow échoue.
+    """
+    def handle_failure(flow, flow_run, state):
+        message = f"""🚨 **ÉCHEC DU PIPELINE**
+
+📋 Flow : `{flow.name}`
+🔢 Run ID : `{flow_run.id}`
+❌ État : `{state.name}`
+⏰ Heure : `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`
+
+Consultez l'interface Prefect pour plus de détails : http://localhost:4200
+"""
+        if service == "discord":
+            send_discord_notification(webhook_url, message)
+        elif service == "slack":
+            send_slack_notification(webhook_url, message)
+
+    return handle_failure
+
+
+def create_success_handler(webhook_url: str, service: str = "discord"):
+    """
+    Créer un handler de succès pour un flow.
+
+    Optionnel : être notifié aussi des succès (utile pour le monitoring).
+    """
+    def handle_success(flow, flow_run, state):
+        message = f"""✅ **PIPELINE RÉUSSI**
+
+📋 Flow : `{flow.name}`
+🔢 Run ID : `{flow_run.id}`
+✅ État : `{state.name}`
+⏰ Heure : `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`
+"""
+        if service == "discord":
+            send_discord_notification(webhook_url, message)
+        elif service == "slack":
+            send_slack_notification(webhook_url, message)
+
+    return handle_success
+
+
+# Exemple de flow avec notifications
+# NOTE : Remplacez VOTRE_WEBHOOK_URL par votre vrai webhook Discord/Slack !
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
+
+
+@task
+def task_that_might_fail(fail_probability: float = 0.5):
+    """Tâche qui peut échouer (pour tester les notifications)."""
+    print(f"Exécution de la tâche (probabilité d'échec : {fail_probability})")
+    if random.random() < fail_probability:
+        raise ValueError("💥 Échec simulé ! Vérifiez vos notifications.")
+    print("✅ Tâche réussie !")
+    return "success"
+
+
+def run_notification_demo():
+    """
+    Démonstration des notifications.
+
+    INSTRUCTIONS :
+    1. Créez un webhook Discord ou Slack
+    2. Définissez la variable d'environnement :
+       - Discord : export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+       - Slack : export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..."
+    3. Exécutez cette démo avec : python Prefect_Workshop.py part7
+    """
+    print("=" * 60)
+    print("PARTIE 7 : NOTIFICATIONS")
+    print("=" * 60)
+
+    # Vérifier si un webhook est configuré
+    webhook_url = DISCORD_WEBHOOK_URL or SLACK_WEBHOOK_URL
+    service = "discord" if DISCORD_WEBHOOK_URL else "slack"
+
+    if not webhook_url:
+        print("""
+⚠️  AUCUN WEBHOOK CONFIGURÉ !
+
+Pour tester les notifications :
+
+1. Créer un webhook Discord :
+   - Paramètres serveur > Intégrations > Webhooks > Nouveau
+   - Copier l'URL
+
+2. Définir la variable d'environnement :
+   - Windows : set DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+   - Linux/Mac : export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+
+3. Relancer : python Prefect_Workshop.py part7
+
+ALTERNATIVE : Mode simulation (sans vrai webhook)
+""")
+        # Mode simulation sans vrai webhook
+        print("Mode simulation : on affiche ce qui serait envoyé\n")
+
+        @flow(name="notification-demo-simulation", log_prints=True)
+        def demo_flow_simulation():
+            print("🔔 [SIMULATION] Notification de démarrage serait envoyée")
+            result = task_that_might_fail(fail_probability=0.5)
+            print("🔔 [SIMULATION] Notification de succès serait envoyée")
+            return result
+
+        try:
+            demo_flow_simulation()
+        except Exception as e:
+            print(f"🔔 [SIMULATION] Notification d'échec serait envoyée : {e}")
+
+        return
+
+    # Webhook configuré - créer les handlers
+    failure_handler = create_failure_handler(webhook_url, service)
+    success_handler = create_success_handler(webhook_url, service)
+
+    @flow(
+        name="notification-demo",
+        log_prints=True,
+        on_failure=[failure_handler],
+        on_completion=[success_handler]  # Appelé sur succès ET échec
+    )
+    def demo_flow_with_notifications():
+        """Flow avec notifications automatiques."""
+        result = task_that_might_fail(fail_probability=0.3)
+        return result
+
+    print(f"\nWebhook {service.upper()} configuré !")
+    print("Exécution du flow de démonstration...")
+    print("Surveillez votre channel pour les notifications !\n")
+
+    try:
+        demo_flow_with_notifications()
+        print("\n✅ Flow terminé avec succès - notification envoyée !")
+    except Exception as e:
+        print(f"\n❌ Flow échoué - notification d'échec envoyée !")
+
+
+# =============================================================================
+# PARTIE 5.5 : ARTEFACTS DE PRÉTRAITEMENT
+# =============================================================================
+#
+# PROBLÈME :
+#   Votre modèle nécessite un scaler/encoder. À l'inférence, vous devez
+#   utiliser LE MÊME scaler que pendant l'entraînement !
+#
+# SOLUTION :
+#   Sauvegarder les artefacts de prétraitement dans MLflow.
+#   Les récupérer à l'inférence.
+#
+# Ce pattern est CRITIQUE pour la production !
+# =============================================================================
+
+@task
+def preprocess_and_save_artifacts(df: pd.DataFrame, run_id: str = None) -> tuple:
+    """
+    Prétraiter les données ET sauvegarder les artefacts dans MLflow.
+
+    Ce pattern est essentiel :
+    - Pendant l'entraînement : fit_transform + sauvegarder le scaler
+    - Pendant l'inférence : charger le scaler + transform (pas fit !)
+
+    Retourne :
+    - X_train, X_test, y_train, y_test : données prétraitées
+    - scaler : l'objet scaler (utile pour l'inférence immédiate)
+    """
+    feature_cols = FEATURE_COLS + ['rfm_score']
+    X = df[feature_cols]
+    y = df['churned']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    # Créer et ajuster le scaler
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    # Convertir en DataFrame pour garder les noms de colonnes
+    X_train_scaled = pd.DataFrame(X_train_scaled, columns=feature_cols, index=X_train.index)
+    X_test_scaled = pd.DataFrame(X_test_scaled, columns=feature_cols, index=X_test.index)
+
+    # Sauvegarder le scaler dans MLflow (si on est dans un run)
+    if mlflow.active_run():
+        with tempfile.TemporaryDirectory() as tmpdir:
+            scaler_path = os.path.join(tmpdir, "scaler.pkl")
+            joblib.dump(scaler, scaler_path)
+            mlflow.log_artifact(scaler_path, artifact_path="preprocessing")
+            print(f"✅ Scaler sauvegardé dans MLflow : preprocessing/scaler.pkl")
+
+    return X_train_scaled, X_test_scaled, y_train, y_test, scaler
+
+
+@task
+def load_preprocessing_artifacts(run_id: str) -> StandardScaler:
+    """
+    Charger les artefacts de prétraitement depuis MLflow.
+
+    Utilisé pendant l'inférence pour appliquer la même transformation
+    que pendant l'entraînement.
+    """
+    from mlflow.tracking import MlflowClient
+
+    client = MlflowClient()
+
+    # Télécharger l'artefact du scaler
+    artifact_path = client.download_artifacts(run_id, "preprocessing/scaler.pkl")
+    scaler = joblib.load(artifact_path)
+
+    print(f"✅ Scaler chargé depuis le run : {run_id[:8]}...")
+    return scaler
+
+
+@task
+def train_model_with_preprocessing(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
+    n_estimators: int,
+    max_depth: int
+) -> dict:
+    """
+    Entraîner un modèle avec des données prétraitées.
+
+    Note : Les features sont déjà scalées par preprocess_and_save_artifacts.
+    """
+    model = RandomForestClassifier(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        random_state=42
+    )
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+    metrics = {
+        "accuracy": accuracy_score(y_test, y_pred),
+        "f1": f1_score(y_test, y_pred)
+    }
+
+    print(f"Modèle entraîné : accuracy={metrics['accuracy']:.4f}, f1={metrics['f1']:.4f}")
+    return {"model": model, "metrics": metrics}
+
+
+@flow(name="pipeline-with-preprocessing", log_prints=True)
+def pipeline_with_preprocessing(
+    n_estimators: int = 100,
+    max_depth: int = 10,
+    experiment_name: str = "workshop-preprocessing"
+):
+    """
+    Pipeline complet avec gestion des artefacts de prétraitement.
+
+    Ce flow démontre le pattern production-ready :
+    1. Charger les données
+    2. Prétraiter ET sauvegarder le scaler
+    3. Entraîner le modèle
+    4. Logger le modèle (le scaler est déjà loggé)
+
+    À l'inférence, il faudra :
+    1. Charger le modèle depuis MLflow
+    2. Charger le scaler depuis les artefacts
+    3. Appliquer scaler.transform() (pas fit_transform !)
+    4. Prédire
+    """
+    print("=" * 60)
+    print("PIPELINE AVEC ARTEFACTS DE PRÉTRAITEMENT")
+    print("=" * 60)
+
+    # Données
+    df = load_data_with_retry()
+    df = engineer_features_cached(df)
+
+    # Configuration MLflow
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment(experiment_name)
+
+    with mlflow.start_run(run_name=f"preprocessing-{datetime.now().strftime('%H%M%S')}") as run:
+        # Tag pour indiquer que ce modèle nécessite un prétraitement
+        mlflow.set_tag("requires_scaling", "true")
+        mlflow.set_tag("orchestrator", "prefect")
+
+        mlflow.log_params({
+            "n_estimators": n_estimators,
+            "max_depth": max_depth
+        })
+
+        # Prétraiter ET sauvegarder le scaler
+        X_train, X_test, y_train, y_test, scaler = preprocess_and_save_artifacts(df)
+
+        # Entraîner
+        result = train_model_with_preprocessing(
+            X_train, X_test, y_train, y_test,
+            n_estimators, max_depth
+        )
+
+        # Logger les métriques et le modèle
+        mlflow.log_metrics(result["metrics"])
+        mlflow.sklearn.log_model(result["model"], "model")
+
+        print(f"\n✅ Run ID : {run.info.run_id}")
+        print(f"✅ Artefacts sauvegardés : model/ et preprocessing/scaler.pkl")
+
+    return {"run_id": run.info.run_id, "metrics": result["metrics"]}
+
+
+def run_preprocessing_demo():
+    """Démonstration du pipeline avec artefacts de prétraitement."""
+    print("=" * 60)
+    print("PARTIE 5.5 : ARTEFACTS DE PRÉTRAITEMENT")
+    print("=" * 60)
+    print("""
+Ce pattern est CRITIQUE pour la production !
+
+PROBLÈME :
+  Votre modèle utilise un StandardScaler. Si vous refaites fit()
+  sur de nouvelles données, l'échelle sera différente !
+
+SOLUTION :
+  1. Pendant l'entraînement : sauvegarder le scaler dans MLflow
+  2. Pendant l'inférence : charger et utiliser le MÊME scaler
+
+Pattern de code :
+  # Entraînement
+  scaler.fit_transform(X_train)
+  mlflow.log_artifact("scaler.pkl", "preprocessing")
+
+  # Inférence
+  scaler = load_artifact("preprocessing/scaler.pkl")
+  X_scaled = scaler.transform(X_new)  # PAS fit_transform !
+""")
+
+    result = pipeline_with_preprocessing()
+
+    print("\n" + "=" * 60)
+    print("DÉMONSTRATION DE L'INFÉRENCE")
+    print("=" * 60)
+
+    # Démontrer le chargement du scaler
+    run_id = result["run_id"]
+    scaler = load_preprocessing_artifacts(run_id)
+
+    # Charger de nouvelles données et appliquer le scaler
+    df = load_data()
+    df = engineer_features(df)
+
+    feature_cols = FEATURE_COLS + ['rfm_score']
+    X_new = df[feature_cols].head(5)
+
+    # Appliquer le scaler (transform, pas fit_transform !)
+    X_scaled = scaler.transform(X_new)
+
+    print(f"\n✅ Nouvelles données scalées avec le même scaler :")
+    print(f"   Shape : {X_scaled.shape}")
+    print(f"   Le modèle peut maintenant prédire sur ces données")
+
+    return result
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -547,6 +989,11 @@ if __name__ == "__main__":
         print("-" * 40)
         result = run_single()
 
+    elif mode == "preprocessing" or mode == "part5.5":
+        print("\nPARTIE 5.5 : Artefacts de Prétraitement")
+        print("-" * 40)
+        result = run_preprocessing_demo()
+
     elif mode == "deploy":
         print("\nPARTIE 6 : Déployer avec Planification (AUTOMATISATION !)")
         print("-" * 40)
@@ -556,6 +1003,9 @@ if __name__ == "__main__":
         print("3. Loggue dans MLflow")
         print("\nAppuyez sur Ctrl+C pour arrêter.\n")
         deploy_with_schedule()
+
+    elif mode == "part7" or mode == "notifications":
+        run_notification_demo()
 
     else:
         print("""
@@ -570,18 +1020,27 @@ CONFIGURATION :
     MLflow:  http://localhost:5000
 
 MODES :
-  part1    Tasks & Flows (bases)
-  part2    Résilience (réessais)
-  part3    Efficacité (cache, parallélisme)
-  part4    Flexibilité (paramètres, sous-flows)
-  part5    Pipeline Complet avec MLflow
-  deploy   AUTOMATISATION - Déployer avec planification !
+  part1         Tasks & Flows (bases)
+  part2         Résilience (réessais)
+  part3         Efficacité (cache, parallélisme)
+  part4         Flexibilité (paramètres, sous-flows)
+  part5         Pipeline Complet avec MLflow
+  preprocessing Artefacts de prétraitement (scaler.pkl)
+  deploy        AUTOMATISATION - Déployer avec planification !
+  part7         NOTIFICATIONS - Alertes Discord/Slack
 
 DÉROULEMENT DE L'ATELIER :
   1. Exécuter part1-part5 pour apprendre les patterns
-  2. Exécuter 'deploy' pour voir l'automatisation réelle
-  3. Ouvrir l'interface Prefect pour observer les exécutions
-  4. Ouvrir l'interface MLflow pour voir les expérimentations
+  2. Exécuter 'preprocessing' pour le pattern scaler
+  3. Exécuter 'deploy' pour voir l'automatisation réelle
+  4. Exécuter 'part7' pour configurer les alertes
+  5. Ouvrir l'interface Prefect pour observer les exécutions
+  6. Ouvrir l'interface MLflow pour voir les expérimentations
+
+NOTIFICATIONS (mode part7) :
+  - Créer un webhook Discord ou Slack
+  - Définir la variable : DISCORD_WEBHOOK_URL ou SLACK_WEBHOOK_URL
+  - Recevoir des alertes automatiques sur échec !
 
 AUTOMATISATION (mode deploy) :
   - Déploie le flow vers Prefect
@@ -591,5 +1050,7 @@ AUTOMATISATION (mode deploy) :
 
 Exemple :
   python Prefect_Workshop.py part1
+  python Prefect_Workshop.py preprocessing
   python Prefect_Workshop.py deploy
+  python Prefect_Workshop.py part7
 """)

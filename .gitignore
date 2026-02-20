@@ -1,5 +1,6 @@
 # Project-specific
 CLAUDE.md
+.claude
 
 # Python
 __pycache__/
@@ -38,7 +39,8 @@ venv.bak/
 *.ipynb_checkpoints/
 
 # MLflow
-mlflow_data/
+mlflow_data/*
+!mlflow_data/.gitkeep
 mlruns/
 mlartifacts/
 

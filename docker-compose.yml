@@ -24,24 +24,26 @@ services:
   # Serveur de Tracking MLflow
   # ---------------------------------------------------------------------------
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.9.0
+    image: ghcr.io/mlflow/mlflow:v3.9.0
     container_name: workshop-mlflow
     ports:
       - "${MLFLOW_PORT:-5000}:5000"
     volumes:
-      - mlflow-data:/mlflow
+      - ./mlflow_data:/mlflow
     command: >
       mlflow server
       --host 0.0.0.0
       --port 5000
       --backend-store-uri sqlite:///mlflow/mlflow.db
-      --default-artifact-root /mlflow/artifacts
+      --default-artifact-root mlflow-artifacts:/artifacts
+      --serve-artifacts
+      --artifacts-destination /mlflow/artifacts
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
@@ -59,7 +61,7 @@ services:
       - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db
     command: prefect server start --host 0.0.0.0
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -140,8 +142,6 @@ services:
 # Volumes
 # =============================================================================
 volumes:
-  mlflow-data:
-    name: workshop-mlflow-data
   prefect-data:
     name: workshop-prefect-data
   dagster-data:
