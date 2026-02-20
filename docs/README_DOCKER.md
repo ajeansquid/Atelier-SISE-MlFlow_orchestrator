@@ -97,11 +97,12 @@ Exécuter les parties de l'atelier localement pour apprendre les patterns d'orch
 pip install -r requirements.txt
 
 # Exécuter les parties de l'atelier
-python pipelines/workshop/prefect/Prefect_Workshop.py part1  # Tasks & Flows
-python pipelines/workshop/prefect/Prefect_Workshop.py part2  # Réessais
-python pipelines/workshop/prefect/Prefect_Workshop.py part3  # Cache & Parallélisme
-python pipelines/workshop/prefect/Prefect_Workshop.py part4  # Paramètres
-python pipelines/workshop/prefect/Prefect_Workshop.py part5  # Pipeline Complet + MLflow
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part1  # Tasks & Flows
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part2  # Réessais
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part3  # Cache & Parallélisme
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part4  # Paramètres
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part5  # Pipeline Complet + MLflow
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part7  # Notifications Discord/Slack
 ```
 
 ### 3. Voir l'Automatisation Réelle (Partie 6)
@@ -109,7 +110,7 @@ python pipelines/workshop/prefect/Prefect_Workshop.py part5  # Pipeline Complet 
 Déployer un flow planifié :
 
 ```bash
-python pipelines/workshop/prefect/Prefect_Workshop.py deploy
+python pipelines/workshop/02_prefect/Prefect_Workshop.py deploy
 ```
 
 Ceci va :

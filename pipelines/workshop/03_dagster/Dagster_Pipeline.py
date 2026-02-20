@@ -10,10 +10,10 @@
 # - Pensez "ce qui existe" pas "ce qui s'exécute"
 #
 # Exécuter localement :
-#   dagster dev -f Dagster_ML_Pipeline.py
+#   dagster dev -f Dagster_Pipeline.py
 #
 # Ou matérialiser les assets :
-#   python Dagster_ML_Pipeline.py
+#   python Dagster_Pipeline.py
 # =============================================================================
 
 from dagster import asset, Definitions, materialize
@@ -35,8 +35,8 @@ MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 EXPERIMENT_NAME = "customer-churn-dagster"
 MODEL_NAME = "churn-predictor-dagster"  # Pour le registre de modèles
 
-# Obtenir la racine du projet (parent de pipelines/examples/)
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Obtenir la racine du projet (parent de pipelines/workshop/03_dagster/)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
 OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_dagster.csv")
 INFERENCE_OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_dagster_inference.csv")

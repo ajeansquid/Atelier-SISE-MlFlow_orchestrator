@@ -38,3 +38,6 @@ pyarrow>=14.0.0
 
 # Jupyter (pour les notebooks VS Code)
 ipykernel>=6.25.0
+
+# Configuration d'environnement
+python-dotenv>=1.0.0

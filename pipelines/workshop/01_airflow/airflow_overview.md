@@ -179,10 +179,10 @@ def pipeline():
 
 ## Implémentation de Référence
 
-Voir l'implémentation Airflow complète :
+Voir l'implémentation Airflow complète (dans ce même dossier) :
 
 ```
-pipelines/examples/Airflow_ML_Pipeline.py
+Airflow_Pipeline.py
 ```
 
 Ce fichier implémente le même pipeline ML que Prefect et Dagster, montrant :
@@ -234,6 +234,6 @@ Malgré la complexité, Airflow est le bon choix quand :
 
 ## Prochaines Étapes
 
-1. **Revoir l'exemple** : Ouvrir `pipelines/examples/Airflow_ML_Pipeline.py`
-2. **Comparer avec Prefect** : Regarder les mêmes opérations dans `pipelines/examples/Prefect_ML_Pipeline.py`
+1. **Revoir l'exemple** : Ouvrir `Airflow_Pipeline.py` dans ce dossier
+2. **Passer à Prefect** : Aller dans `../02_prefect/Prefect_Workshop.py` pour apprendre l'alternative
 3. **Comprendre les compromis** : La complexité d'Airflow vous apporte des fonctionnalités d'entreprise et un écosystème

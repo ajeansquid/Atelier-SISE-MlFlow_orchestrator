@@ -25,15 +25,23 @@
 #      - MLflow:  http://localhost:5000 (expérimentations, modèles)
 #
 # 3. Exécuter les parties de l'atelier :
-#      python pipelines/workshop/prefect/Prefect_Workshop.py part1
+#      python pipelines/workshop/02_prefect/Prefect_Workshop.py part1
 #      ...
-#      python pipelines/workshop/prefect/Prefect_Workshop.py deploy
+#      python pipelines/workshop/02_prefect/Prefect_Workshop.py deploy
 #
 # =============================================================================
 
+import sys
+import io
+
+# Fix d'encodage pour Windows (sinon les logs avec caractères spéciaux peuvent causer des erreurs)
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 from prefect import flow, task, serve
 from prefect.tasks import task_input_hash
-from prefect.client import get_client
+from prefect.client.orchestration import get_client
 from datetime import timedelta, datetime
 import pandas as pd
 import numpy as np
@@ -62,8 +70,13 @@ except ImportError:
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
+# Charger le fichier .env pour la configuration locale (PREFECT_API_URL, MLFLOW_TRACKING_URI)
+from dotenv import load_dotenv
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+
 # Lors de l'exécution dans Docker, ces variables d'environnement sont définies par docker-compose
-PROJECT_ROOT = os.getenv("PROJECT_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+PROJECT_ROOT = os.getenv("PROJECT_ROOT", PROJECT_ROOT)
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 PREFECT_API_URL = os.getenv("PREFECT_API_URL", "http://localhost:4200/api")
@@ -346,7 +359,7 @@ def train_with_mlflow(df: pd.DataFrame, n_estimators: int, max_depth: int, exper
         y_pred = model.predict(X_test)
         metrics = {"accuracy": accuracy_score(y_test, y_pred), "f1": f1_score(y_test, y_pred)}
         mlflow.log_metrics(metrics)
-        mlflow.sklearn.log_model(model, "model")
+        mlflow.sklearn.log_model(model, name="model")
 
         print(f"MLflow run: {run.info.run_id}")
         print(f"Accuracy: {metrics['accuracy']:.4f}")
@@ -472,6 +485,10 @@ def deploy_with_schedule():
     3. Voir "churn-prediction-pipeline/scheduled-training"
     4. Observer les exécutions apparaître toutes les 2 minutes !
     5. Vérifier l'interface MLflow : http://localhost:5000 pour les nouvelles expérimentations
+
+    POUR ARRÊTER :
+    - Terminal : Ctrl+C (arrête le processus serve())
+    - Interface Prefect : Deployments > scheduled-training > Pause ou Delete
     """
     print("=" * 60)
     print("DÉPLOIEMENT DU PIPELINE AVEC PLANIFICATION")
@@ -483,6 +500,9 @@ def deploy_with_schedule():
     print("\nAprès le déploiement :")
     print(f"  - Interface Prefect: http://localhost:4200")
     print(f"  - Interface MLflow:  {MLFLOW_TRACKING_URI}")
+    print("\nPOUR ARRÊTER :")
+    print("  - Terminal : Ctrl+C")
+    print("  - Interface : Deployments > Pause ou Delete")
     print("=" * 60)
 
     # Déployer en utilisant serve() - ceci exécute le planificateur localement
@@ -881,7 +901,7 @@ def pipeline_with_preprocessing(
 
         # Logger les métriques et le modèle
         mlflow.log_metrics(result["metrics"])
-        mlflow.sklearn.log_model(result["model"], "model")
+        mlflow.sklearn.log_model(result["model"], name="model")
 
         print(f"\n✅ Run ID : {run.info.run_id}")
         print(f"✅ Artefacts sauvegardés : model/ et preprocessing/scaler.pkl")

@@ -42,8 +42,8 @@ MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 EXPERIMENT_NAME = "customer-churn-airflow"
 MODEL_NAME = "churn-predictor-airflow"  # Pour le registre de modèles
 
-# Obtenir la racine du projet (parent de pipelines/examples/)
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Obtenir la racine du projet (parent de pipelines/workshop/01_airflow/)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
 OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_airflow.csv")
 INFERENCE_OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_airflow_inference.csv")

@@ -32,17 +32,20 @@ DÉVELOPPER → SUIVRE → ENREGISTRER → SERVIR → AUTOMATISER
 
 ### Phase 2 : Orchestration avec Automatisation (Focus Principal)
 
-**Atelier Prefect** (`pipelines/workshop/prefect/Prefect_Workshop.py`) :
+**Atelier Prefect** (`pipelines/workshop/02_prefect/`) :
+- `Prefect_Workshop.py` : Référence complète (7 parties)
+- `Prefect_Exercises.py` : **Exercices interactifs** (approche Fil Rouge - un vrai pipeline Churn à blinder progressivement !)
 - Partie 1 : Tasks & Flows (bases)
 - Partie 2 : Résilience (réessais, backoff exponentiel)
 - Partie 3 : Efficacité (cache, entraînement de modèles en parallèle)
 - Partie 4 : Flexibilité (paramètres, sous-flows)
 - Partie 5 : Pipeline complet avec intégration MLflow
 - **Partie 6 : AUTOMATISATION - Déployer, planifier, regarder l'exécution !**
+- Partie 7 : Notifications (Discord/Slack)
 
 ### Phase 3 : Bonus Dagster
 
-**Atelier Dagster** (`pipelines/workshop/dagster/Dagster_Workshop.py`) :
+**Atelier Dagster** (`pipelines/workshop/03_dagster/Dagster_Workshop.py`) :
 - Transformer les tâches en assets
 - Inférence automatique des dépendances
 - Jobs et planifications pour l'automatisation
@@ -134,18 +137,19 @@ Cela crée `data/customer_data.csv` utilisé par tous les pipelines.
 
 ### 5. Exécuter l'Atelier
 
-**Apprendre les patterns (Parties 1-5) :**
+**Apprendre les patterns (Parties 1-7) :**
 ```bash
-python pipelines/workshop/prefect/Prefect_Workshop.py part1  # Tasks & Flows
-python pipelines/workshop/prefect/Prefect_Workshop.py part2  # Réessais
-python pipelines/workshop/prefect/Prefect_Workshop.py part3  # Cache & Parallélisme
-python pipelines/workshop/prefect/Prefect_Workshop.py part4  # Paramètres
-python pipelines/workshop/prefect/Prefect_Workshop.py part5  # Pipeline Complet + MLflow
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part1  # Tasks & Flows
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part2  # Réessais
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part3  # Cache & Parallélisme
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part4  # Paramètres
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part5  # Pipeline Complet + MLflow
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part7  # Notifications Discord/Slack
 ```
 
 **Voir l'automatisation réelle (Partie 6) :**
 ```bash
-python pipelines/workshop/prefect/Prefect_Workshop.py deploy
+python pipelines/workshop/02_prefect/Prefect_Workshop.py deploy
 ```
 
 Cela déploie un flow planifié qui s'exécute toutes les 2 minutes. Observez :
@@ -158,9 +162,9 @@ docker-compose --profile dagster up -d
 # Ouvrir http://localhost:3000
 
 # Ou exécuter depuis la ligne de commande :
-python pipelines/workshop/dagster/Dagster_Workshop.py full       # Matérialiser tous les assets
-python pipelines/workshop/dagster/Dagster_Workshop.py data       # Préparation des données uniquement
-python pipelines/workshop/dagster/Dagster_Workshop.py selective  # Matérialisation sélective
+python pipelines/workshop/03_dagster/Dagster_Workshop.py full       # Matérialiser tous les assets
+python pipelines/workshop/03_dagster/Dagster_Workshop.py data       # Préparation des données uniquement
+python pipelines/workshop/03_dagster/Dagster_Workshop.py selective  # Matérialisation sélective
 
 # Activer la planification dans l'interface : Overview > Schedules > churn_training_schedule
 # Observer les exécutions apparaître toutes les 2 minutes !
@@ -168,7 +172,7 @@ python pipelines/workshop/dagster/Dagster_Workshop.py selective  # Matérialisat
 
 **Vue d'ensemble Airflow (lecture guidée) :**
 
-Lire `pipelines/workshop/airflow/airflow_overview.md` pour comprendre les points de friction d'Airflow pour les workflows ML. Ensuite comparer avec l'implémentation de référence dans `pipelines/examples/Airflow_ML_Pipeline.py`.
+Lire `pipelines/workshop/01_airflow/airflow_overview.md` pour comprendre les points de friction d'Airflow pour les workflows ML. Ensuite comparer avec l'implémentation de référence dans `pipelines/workshop/01_airflow/Airflow_Pipeline.py`.
 
 ---
 
@@ -180,19 +184,20 @@ Lire `pipelines/workshop/airflow/airflow_overview.md` pour comprendre les points
 │   ├── 01b_mlflow_transition.ipynb   # Transition MLflow guidée
 │   └── 02_mlflow_organized.ipynb     # Solution MLflow complète
 │
-├── pipelines/
-│   ├── workshop/                     # Matériel d'apprentissage
-│   │   ├── prefect/
-│   │   │   └── Prefect_Workshop.py   # Atelier en 6 parties (avec automatisation !)
-│   │   ├── dagster/
-│   │   │   └── Dagster_Workshop.py   # Bonus centré sur les assets (avec planifications !)
-│   │   └── airflow/
-│   │       └── airflow_overview.md   # Guide des points de friction
+├── pipelines/workshop/               # Matériel d'apprentissage
+│   ├── orchestrator_guide.md         # Guide des concepts
 │   │
-│   └── examples/                     # Implémentations de référence
-│       ├── Prefect_ML_Pipeline.py
-│       ├── Airflow_ML_Pipeline.py
-│       └── Dagster_ML_Pipeline.py
+│   ├── 01_airflow/                   # LECTURE GUIDÉE (voir le standard)
+│   │   ├── airflow_overview.md       # Points de friction expliqués
+│   │   └── Airflow_Pipeline.py       # Pipeline complet de référence
+│   │
+│   ├── 02_prefect/                   # FOCUS PRINCIPAL
+│   │   ├── Prefect_Workshop.py       # Référence complète (7 parties)
+│   │   └── Prefect_Exercises.py      # Exercices interactifs (approche Fil Rouge)
+│   │
+│   └── 03_dagster/                   # BONUS
+│       ├── Dagster_Workshop.py       # Atelier centré sur les assets
+│       └── Dagster_Pipeline.py       # Pipeline complet de référence
 │
 ├── docs/
 │   ├── mlflow_cheatsheet.md          # Référence rapide

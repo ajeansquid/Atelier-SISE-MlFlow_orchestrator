@@ -281,7 +281,12 @@ def train_model(df: pd.DataFrame, n_estimators: int) -> dict:
 
 ### Atelier Prefect (Focus Principal)
 
-Situé dans `prefect/Prefect_Workshop.py`
+Situé dans `02_prefect/`
+
+- `Prefect_Workshop.py` : Référence complète (7 parties)
+- `Prefect_Exercises.py` : **Exercices interactifs** (approche Fil Rouge)
+  - Un vrai pipeline Churn que vous "blindez" progressivement
+  - Étapes : etape1 → etape2 → ... → deploy → notif
 
 | Partie | Pattern d'Orchestration | Problème ML Résolu |
 |------|----------------------|-------------------|
@@ -293,18 +298,19 @@ Situé dans `prefect/Prefect_Workshop.py`
 
 ### Vue d'Ensemble Airflow (Lecture Guidée)
 
-Situé dans `airflow/airflow_overview.md`
+Situé dans `01_airflow/`
 
 - Pourquoi Airflow existe (standard de l'industrie)
 - Points de friction pour le ML (limites XCom, I/O fichiers)
-- Référence : `pipelines/examples/Airflow_ML_Pipeline.py`
+- `airflow_overview.md` : Explication des concepts
+- `Airflow_Pipeline.py` : Pipeline complet de référence
 
 ### Atelier Dagster (Bonus)
 
-Situé dans `dagster/Dagster_Workshop.py`
+Situé dans `03_dagster/`
 
-- Transformer votre pipeline Prefect en assets Dagster
-- Apprendre la pensée centrée sur les assets
+- `Dagster_Workshop.py` : Apprendre la pensée centrée sur les assets
+- `Dagster_Pipeline.py` : Pipeline complet de référence
 - Utiliser l'interface Dagster pour la visualisation
 
 ---
@@ -328,43 +334,51 @@ python generate_sample_data.py
 
 ```bash
 # Partie 1 : Tasks & Flows
-python pipelines/workshop/prefect/Prefect_Workshop.py part1
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part1
 
 # Partie 2 : Résilience (Réessais)
-python pipelines/workshop/prefect/Prefect_Workshop.py part2
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part2
 
 # Partie 3 : Efficacité (Cache, Parallèle)
-python pipelines/workshop/prefect/Prefect_Workshop.py part3
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part3
 
 # Partie 4 : Flexibilité (Paramètres, Sous-flows)
-python pipelines/workshop/prefect/Prefect_Workshop.py part4
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part4
 
 # Partie 5 : Pipeline Complet avec MLflow
-python pipelines/workshop/prefect/Prefect_Workshop.py part5
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part5
+
+# Partie 6 : Déploiement avec planification
+python pipelines/workshop/02_prefect/Prefect_Workshop.py deploy
+
+# Partie 7 : Notifications (Discord/Slack)
+python pipelines/workshop/02_prefect/Prefect_Workshop.py part7
 ```
 
 ### Atelier Dagster (Bonus)
 
 ```bash
 # Ligne de commande
-python pipelines/workshop/dagster/Dagster_Workshop.py full
+python pipelines/workshop/03_dagster/Dagster_Workshop.py full
+
+# Pipeline complet de référence
+python pipelines/workshop/03_dagster/Dagster_Pipeline.py
 
 # Avec interface (recommandé)
-dagster dev -f pipelines/workshop/dagster/Dagster_Workshop.py
+dagster dev -f pipelines/workshop/03_dagster/Dagster_Pipeline.py
 # Ouvrir http://localhost:3000
 ```
 
-### Implémentations de Référence
+### Pipeline Airflow (Référence)
 
 ```bash
-# Pipeline Prefect complet
-python pipelines/examples/Prefect_ML_Pipeline.py
+# Lire le code pour comprendre les points de friction
+# pipelines/workshop/01_airflow/Airflow_Pipeline.py
 
-# Pipeline Dagster complet
-dagster dev -f pipelines/examples/Dagster_ML_Pipeline.py
-
-# Référence Airflow (lire le code)
-# pipelines/examples/Airflow_ML_Pipeline.py
+# Exécution standalone (simulation sans Airflow)
+python pipelines/workshop/01_airflow/Airflow_Pipeline.py
+python pipelines/workshop/01_airflow/Airflow_Pipeline.py train
+python pipelines/workshop/01_airflow/Airflow_Pipeline.py inference
 ```
 
 ### Visualiser les Résultats
@@ -454,8 +468,8 @@ def train_with_mlflow(df, params):
 
 ## Prochaines Étapes
 
-1. **Commencer avec Prefect** : `python pipelines/workshop/prefect/Prefect_Workshop.py part1`
-2. **Progresser à travers toutes les parties** : part1 → part2 → part3 → part4 → part5
-3. **Essayer le bonus Dagster** : Transformer vos connaissances vers la pensée centrée sur les assets
-4. **Réviser Airflow** : Comprendre pourquoi les alternatives existent
+1. **Commencer par Airflow** : Lire `01_airflow/airflow_overview.md` pour comprendre le standard
+2. **Focus Prefect** : `python pipelines/workshop/02_prefect/Prefect_Workshop.py part1`
+3. **Progresser à travers toutes les parties** : part1 → part2 → part3 → part4 → part5 → deploy → part7
+4. **Essayer le bonus Dagster** : Transformer vos connaissances vers la pensée centrée sur les assets
 5. **Explorer les pipelines de référence** : Voir les patterns prêts pour la production
