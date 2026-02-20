@@ -1,33 +1,33 @@
-# Airflow: The Industry Standard
+# Airflow : le standard industriel
 
-## Why Look at Airflow?
+## Pourquoi s'intéresser à Airflow ?
 
-**Airflow** is the most widely deployed orchestrator in industry:
-- Created by Airbnb in 2014, now an Apache project
-- Used by: Uber, Slack, Twitter, Adobe, Lyft, and thousands more
-- Battle-tested at massive scale
+**Airflow** est l'orchestrateur le plus déployé en production :
+- Créé par Airbnb en 2014, aujourd'hui un projet Apache
+- Utilisé par : Uber, Slack, Twitter, Adobe, Lyft, et des milliers d'autres
+- Éprouvé à grande échelle
 
-Understanding Airflow helps you:
-1. Work with existing enterprise systems
-2. Appreciate why alternatives like Prefect and Dagster were created
-3. Make informed decisions about which tool to use
+Comprendre Airflow vous aide à :
+1. Travailler avec des systèmes d'entreprise existants
+2. Comprendre pourquoi des alternatives comme Prefect et Dagster ont été créées
+3. Prendre des décisions éclairées sur l'outil à utiliser
 
 ---
 
-## Airflow Concepts
+## Concepts d'Airflow
 
 ```
-Airflow Vocabulary
+Vocabulaire Airflow
 ─────────────────────────────────────────────
-DAG         Directed Acyclic Graph - your pipeline definition
-Task        One step in the pipeline
-Operator    Type of task (PythonOperator, BashOperator, etc.)
-XCom        Cross-communication between tasks (key-value store)
+DAG         Graphe orienté acyclique - la définition de votre pipeline
+Task        Une étape dans le pipeline
+Operator    Type de tâche (PythonOperator, BashOperator, etc.)
+XCom        Communication entre tâches (stockage clé-valeur)
 ```
 
 ---
 
-## The Pain Points (Why We Focus on Prefect)
+## Points Douloureux (Pourquoi nous privilégions Prefect)
 
 ### Point Douloureux 1 : Limitations de XCom
 
