@@ -10,7 +10,7 @@
 #   ÉTAPE 1 : Tasks & Flows (transformer les fonctions en tâches orchestrées)
 #   ÉTAPE 2 : Résilience (ajouter des réessais sur le chargement)
 #   ÉTAPE 3 : Efficacité (cacher le preprocessing coûteux)
-#   ÉTAPE 4 : MLflow (tracker les expérimentations)
+#   ÉTAPE 4 : MLflow + sklearn Pipeline (tracker avec la meilleure pratique)
 #   ÉTAPE 5 : Orchestration (organiser en sous-flows)
 #   ÉTAPE 6 : Déploiement (planifier l'exécution automatique)
 #   ÉTAPE 7 : Notifications (alertes Discord/Slack en cas d'échec)
@@ -504,6 +504,7 @@ def run_etape3():
 #   - Prefect gère : réessais, cache, planification, logs d'exécution
 #   - MLflow gère : paramètres, métriques, artefacts, versioning des modèles
 #   - Les appels MLflow se font DANS les tâches Prefect
+#   - sklearn Pipeline : combine scaler + modèle en UN SEUL artefact (best practice !)
 #
 # =============================================================================
 
@@ -511,10 +512,12 @@ def run_etape4():
     """
     ÉTAPE 4 : Intégrer MLflow pour le tracking
 
-    Ajoutez le tracking MLflow dans la tâche d'entraînement.
+    Ajoutez le tracking MLflow avec sklearn Pipeline.
     """
     from prefect import flow, task
     from prefect.tasks import task_input_hash
+    from sklearn.pipeline import Pipeline as SklearnPipeline
+    from sklearn.preprocessing import StandardScaler
 
     # Vérifier si MLflow est disponible
     try:
@@ -526,8 +529,24 @@ def run_etape4():
         print("⚠️  MLflow non installé. Exercice en mode simulation.")
 
     print("=" * 70)
-    print("ÉTAPE 4 : MLFLOW - Tracking des expérimentations")
+    print("ÉTAPE 4 : MLFLOW + SKLEARN PIPELINE")
     print("=" * 70)
+    print("""
+POURQUOI SKLEARN PIPELINE ?
+
+Au lieu de gérer scaler et modèle séparément :
+   scaler.fit_transform(X)
+   model.fit(X_scaled, y)
+   mlflow.log_artifact("scaler.pkl")  # Artefact 1
+   mlflow.log_model(model)            # Artefact 2
+   # → 2 artefacts, risque d'oublier le scaler à l'inférence !
+
+On combine tout dans un Pipeline :
+   pipeline = Pipeline([('scaler', StandardScaler()), ('model', RF())])
+   pipeline.fit(X, y)
+   mlflow.log_model(pipeline)  # UN SEUL artefact !
+   # → À l'inférence : pipeline.predict(X) fait TOUT
+""")
 
     @task(retries=3, retry_delay_seconds=[5, 10, 20])
     def load_data() -> pd.DataFrame:
@@ -538,7 +557,7 @@ def run_etape4():
         return preprocess_data(df)
 
     # -------------------------------------------------------------------------
-    # TODO : Complétez l'intégration MLflow dans cette tâche
+    # TODO : Complétez l'intégration MLflow avec sklearn Pipeline
     # -------------------------------------------------------------------------
     @task
     def train_with_mlflow(
@@ -548,21 +567,41 @@ def run_etape4():
         max_depth: int,
         experiment_name: str
     ) -> dict:
-        """Entraîner et logger dans MLflow."""
+        """Entraîner avec sklearn Pipeline et logger dans MLflow."""
         from sklearn.ensemble import RandomForestClassifier
         from sklearn.model_selection import train_test_split
         from sklearn.metrics import accuracy_score, f1_score
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+        # ---------------------------------------------------------------------
+        # TODO : Créez le sklearn Pipeline
+        # INDICE :
+        #   pipeline = SklearnPipeline([
+        #       ('scaler', StandardScaler()),
+        #       ('model', RandomForestClassifier(n_estimators=..., max_depth=..., random_state=42))
+        #   ])
+        # ---------------------------------------------------------------------
+        pipeline = SklearnPipeline([
+            ('scaler', StandardScaler()),
+            ('model', RandomForestClassifier(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                random_state=42
+            ))
+        ])
+
+        # Entraîner le pipeline (scaler + modèle en une seule ligne)
+        pipeline.fit(X_train, y_train)
+
+        # Prédire (le pipeline applique automatiquement le scaling)
+        y_pred = pipeline.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
+
         if not MLFLOW_AVAILABLE:
-            # Mode simulation (sans MLflow)
-            print("📊 [SIMULATION] Training sans MLflow...")
-            model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
-            model.fit(X_train, y_train)
-            accuracy = accuracy_score(y_test, model.predict(X_test))
-            print(f"✅ [SIMULATION] Accuracy : {accuracy:.4f}")
-            return {"model": model, "accuracy": accuracy, "run_id": "simulation"}
+            print(f"📊 [SIMULATION] Pipeline entraîné : Accuracy={accuracy:.4f}")
+            return {"pipeline": pipeline, "accuracy": accuracy, "run_id": "simulation"}
 
         # ---------------------------------------------------------------------
         # TODO : Configurez MLflow
@@ -572,7 +611,7 @@ def run_etape4():
         pass  # <-- Remplacez par la configuration MLflow
 
         # ---------------------------------------------------------------------
-        # TODO : Démarrez un run MLflow
+        # TODO : Démarrez un run MLflow et loggez le pipeline
         # INDICE : with mlflow.start_run(run_name="prefect-training"):
         # ---------------------------------------------------------------------
         # Décommentez et complétez :
@@ -582,37 +621,22 @@ def run_etape4():
         #     # TODO : Loggez les paramètres
         #     # mlflow.log_params({"n_estimators": n_estimators, "max_depth": max_depth})
         #
-        #     # Entraîner le modèle
-        #     model = RandomForestClassifier(
-        #         n_estimators=n_estimators,
-        #         max_depth=max_depth,
-        #         random_state=42
-        #     )
-        #     model.fit(X_train, y_train)
-        #
-        #     # Calculer les métriques
-        #     y_pred = model.predict(X_test)
-        #     accuracy = accuracy_score(y_test, y_pred)
-        #     f1 = f1_score(y_test, y_pred)
-        #
         #     # TODO : Loggez les métriques
         #     # mlflow.log_metrics({"accuracy": accuracy, "f1": f1})
         #
-        #     # TODO : Loggez le modèle
-        #     # mlflow.sklearn.log_model(model, artifact_path="model")
+        #     # TODO : Loggez le PIPELINE (scaler + modèle en UN artefact !)
+        #     # mlflow.sklearn.log_model(pipeline, artifact_path="model")
         #
         #     run_id = mlflow.active_run().info.run_id
         #     print(f"✅ MLflow Run ID : {run_id}")
         #     print(f"   Accuracy : {accuracy:.4f}, F1 : {f1:.4f}")
+        #     print(f"   ⭐ Pipeline loggé (scaler + model en UN artefact)")
         #
-        # return {"model": model, "accuracy": accuracy, "f1": f1, "run_id": run_id}
+        # return {"pipeline": pipeline, "accuracy": accuracy, "f1": f1, "run_id": run_id}
 
         # En attendant que vous complétiez, version sans tracking :
-        model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
-        model.fit(X_train, y_train)
-        accuracy = accuracy_score(y_test, model.predict(X_test))
         print(f"⚠️  MLflow non configuré. Accuracy : {accuracy:.4f}")
-        return {"model": model, "accuracy": accuracy, "run_id": None}
+        return {"pipeline": pipeline, "accuracy": accuracy, "run_id": None}
 
     # -------------------------------------------------------------------------
     # TODO : Ajoutez des paramètres au flow avec des valeurs par défaut
@@ -1099,9 +1123,9 @@ PROGRESSION :
   etape1    Tasks & Flows      → Transformer les fonctions en tâches
   etape2    Résilience         → Ajouter des réessais sur le chargement
   etape3    Efficacité         → Cacher le preprocessing coûteux
-  etape4    MLflow             → Tracker les expérimentations
+  etape4    MLflow + Pipeline  → Tracker avec sklearn Pipeline ⭐
   etape5    Sous-flows         → Organiser en modules réutilisables
-  deploy    Automatisation     → Planifier l'exécution automatique ⭐
+  deploy    Automatisation     → Planifier l'exécution automatique
   notif     Notifications      → Alertes Discord/Slack (bonus)
 
 PRÉREQUIS :
@@ -1112,7 +1136,7 @@ UTILISATION :
   python Prefect_Exercises.py etape1   # Commencez ici !
   python Prefect_Exercises.py etape2   # Puis continuez...
   python Prefect_Exercises.py etape3
-  python Prefect_Exercises.py etape4
+  python Prefect_Exercises.py etape4   # MLflow + sklearn Pipeline
   python Prefect_Exercises.py etape5
   python Prefect_Exercises.py deploy   # Le clou du spectacle !
   python Prefect_Exercises.py notif    # Bonus
