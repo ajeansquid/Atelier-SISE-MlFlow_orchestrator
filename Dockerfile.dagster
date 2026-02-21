@@ -7,8 +7,8 @@
 #   - dagster-webserver: Interface à :3000
 #   - dagster-daemon: Exécute les planifications
 #
-# Build: docker-compose --profile dagster build
-# Run:   docker-compose --profile dagster up -d
+# Build: docker-compose build dagster-webserver dagster-daemon
+# Run:   docker-compose up -d
 #
 # =============================================================================
 
@@ -30,11 +30,26 @@ RUN pip install --no-cache-dir \
 # Créer le répertoire dagster home et la configuration workspace
 RUN mkdir -p /app/dagster_home
 
-# Créer workspace.yaml pointant vers les exercices interactifs
-RUN echo 'load_from:\n  - python_file:\n      relative_path: pipelines/workshop/03_dagster/Dagster_Exercises.py\n      working_directory: /app' > /app/dagster_home/workspace.yaml
+# Créer workspace.yaml pointant vers les exercices ET la référence
+# Les étudiants voient les deux dans l'interface :
+#   - Exercises : graphe cassé à réparer (apprentissage)
+#   - Workshop : solution complète avec planifications (référence)
+RUN printf '%s\n' \
+    'load_from:' \
+    '  - python_file:' \
+    '      relative_path: pipelines/workshop/03_dagster/Dagster_Exercises.py' \
+    '      working_directory: /app' \
+    '  - python_file:' \
+    '      relative_path: pipelines/workshop/03_dagster/Dagster_Workshop.py' \
+    '      working_directory: /app' \
+    > /app/dagster_home/workspace.yaml
 
 # Créer la configuration dagster.yaml
-RUN echo 'run_coordinator:\n  module: dagster.core.run_coordinator\n  class: QueuedRunCoordinator' > /app/dagster_home/dagster.yaml
+RUN printf '%s\n' \
+    'run_coordinator:' \
+    '  module: dagster.core.run_coordinator' \
+    '  class: QueuedRunCoordinator' \
+    > /app/dagster_home/dagster.yaml
 
 ENV DAGSTER_HOME=/app/dagster_home
 

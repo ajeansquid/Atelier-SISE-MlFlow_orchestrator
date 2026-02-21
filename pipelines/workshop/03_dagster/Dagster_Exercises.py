@@ -9,7 +9,7 @@
 #   - Dagster : "Je veux que cette donnée existe" (noms, états)
 #
 # LANCEMENT :
-#   Avec Docker (recommandé) : docker-compose --profile dagster up -d
+#   Avec Docker (recommandé) : docker-compose up -d
 #   Sans Docker : dagster dev -f Dagster_Exercises.py
 #
 # Puis ouvrez http://localhost:3000 et observez le graphe se dessiner !
@@ -295,7 +295,7 @@ if __name__ == "__main__":
     print("=" * 70)
     print("""
 LANCEMENT RECOMMANDÉ :
-  docker-compose --profile dagster up -d
+  docker-compose up -d
 
 Puis ouvrez http://localhost:3000
 

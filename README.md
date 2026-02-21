@@ -93,42 +93,65 @@ VOTRE MACHINE :
 |------|---------|---------|
 | **Python** | >= 3.10 | Tous les pipelines et notebooks |
 | **Docker** & **Docker Compose** | Récente | Serveur MLflow, serveur/worker Prefect, Dagster |
+| **uv** | Récente | Gestionnaire de paquets Python (recommandé) |
 | **VS Code** | Récente | Notebooks, édition de code |
 | **Git** | Toute version | Cloner le dépôt |
+
+> **Installation uv :** `pip install uv` ou voir [docs.astral.sh/uv](https://docs.astral.sh/uv/)
 
 ---
 
 ## Démarrage Rapide
 
-### 1. Démarrer la Stack
+### 1. Cloner et Configurer l'Environnement
 
 ```bash
-# Démarrer MLflow + Prefect (serveur + worker)
+git clone <url-du-repo>
+cd Atelier-SISE-MlFlow_orchestrator
+
+# Copier le fichier de configuration
+cp .env.example .env
+```
+
+### 2. Installer les Dépendances Python (avec uv)
+
+```bash
+# Créer le venv et installer les dépendances de base
+uv sync
+
+# Ajouter les orchestrateurs (Prefect + Dagster)
+uv sync --extra orchestrators
+```
+
+> **Alternative avec pip :** `pip install -r requirements.txt` (mais uv est recommandé)
+
+### 3. Démarrer la Stack Docker
+
+```bash
+# Démarrer tous les services (MLflow + Prefect + Dagster)
 docker-compose up -d
 
 # Vérifier les services
 docker-compose ps
 # Attendre le statut "healthy"
-
-# Optionnel : Ajouter Dagster
-docker-compose --profile dagster up -d
 ```
 
-### 2. Installer les Dépendances Locales
+### 4. Générer les Données d'Exemple
 
 ```bash
-pip install -r requirements.txt
-```
+# Activer le venv (Windows PowerShell)
+.venv\Scripts\activate
 
-### 3. Générer les Données d'Exemple
+# Activer le venv (Mac/Linux)
+source .venv/bin/activate
 
-```bash
+# Générer les données
 python generate_sample_data.py
 ```
 
 Cela crée `data/customer_data.csv` utilisé par tous les pipelines.
 
-### 4. Accéder aux Interfaces
+### 5. Accéder aux Interfaces
 
 | Service | URL | Objectif |
 |---------|-----|---------|
@@ -136,7 +159,7 @@ Cela crée `data/customer_data.csv` utilisé par tous les pipelines.
 | **MLflow** | http://localhost:5000 | Expérimentations, modèles, artefacts |
 | **Dagster** | http://localhost:3000 | Graphe d'assets, matérialisations (bonus) |
 
-### 5. Exécuter l'Atelier
+### 6. Exécuter l'Atelier
 
 **Apprendre les patterns (Parties 1-7) :**
 ```bash
@@ -157,9 +180,9 @@ Cela déploie un flow planifié qui s'exécute toutes les 2 minutes. Observez :
 - **Interface Prefect** : Voir les déploiements et les exécutions automatiques
 - **Interface MLflow** : Voir les expérimentations apparaître automatiquement
 
-**Bonus Dagster :**
+**Dagster :**
 ```bash
-docker-compose --profile dagster up -d
+# Dagster démarre avec docker-compose up -d
 # Ouvrir http://localhost:3000 et suivre les TODOs dans Dagster_Exercises.py
 # Le graphe est "cassé" volontairement - corrigez-le en modifiant le fichier !
 
@@ -216,22 +239,19 @@ Lire `pipelines/workshop/01_airflow/airflow_overview.md` pour comprendre les poi
 
 ## Services Docker
 
-| Service | Port | Objectif | Par défaut |
-|---------|------|---------|---------|
-| **mlflow** | 5000 | Tracking d'expérimentations, registre de modèles | Oui |
-| **prefect-server** | 4200 | Monitoring de flows, déploiements, planifications | Oui |
-| **prefect-worker** | - | Exécute les flows planifiés | Oui |
-| **dagster-webserver** | 3000 | Interface du graphe d'assets (bonus) | `--profile dagster` |
-| **dagster-daemon** | - | Exécute les jobs planifiés (bonus) | `--profile dagster` |
+| Service | Port | Objectif |
+|---------|------|---------|
+| **mlflow** | 5000 | Tracking d'expérimentations, registre de modèles |
+| **prefect-server** | 4200 | Monitoring de flows, déploiements, planifications |
+| **prefect-worker** | - | Exécute les flows planifiés |
+| **dagster-webserver** | 3000 | Interface du graphe d'assets |
+| **dagster-daemon** | - | Exécute les jobs planifiés |
 
 ### Commandes
 
 ```bash
-# Atelier principal (MLflow + Prefect)
+# Démarrer tous les services (MLflow + Prefect + Dagster)
 docker-compose up -d
-
-# Avec bonus Dagster
-docker-compose --profile dagster up -d
 
 # Tout arrêter
 docker-compose down
@@ -378,6 +398,62 @@ def customer_features(raw_data: pd.DataFrame) -> pd.DataFrame:
 
 ### Langage CV/Entretien :
 > "J'ai implémenté des pipelines ML en utilisant MLflow pour le suivi des expérimentations et le registre de modèles, avec Prefect pour l'orchestration et la planification. Je peux déployer des pipelines de réentraînement automatisés et je comprends les compromis entre les différentes approches d'orchestration."
+
+---
+
+## Dépannage
+
+### Erreur d'encodage Unicode (Windows)
+
+Si vous voyez une erreur avec les emojis :
+```bash
+# PowerShell
+$env:PYTHONIOENCODING="utf-8"
+
+# CMD
+set PYTHONIOENCODING=utf-8
+```
+
+### Module not found (prefect, dagster, mlflow)
+
+Vérifiez que vous utilisez le bon Python (celui du venv) :
+```bash
+# Windows
+.venv\Scripts\python.exe pipelines/workshop/02_prefect/Prefect_Exercises.py
+
+# Mac/Linux
+.venv/bin/python pipelines/workshop/02_prefect/Prefect_Exercises.py
+
+# Ou activez le venv d'abord
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # Mac/Linux
+```
+
+### Docker ne démarre pas
+
+```bash
+# Vérifier les logs
+docker-compose logs -f
+
+# Redémarrer proprement
+docker-compose down
+docker-compose up -d
+```
+
+### Prefect ne se connecte pas au serveur Docker
+
+Vérifiez que `.env` existe et contient :
+```
+PREFECT_API_URL=http://localhost:4200/api
+MLFLOW_TRACKING_URI=http://localhost:5000
+```
+
+### Kernel Jupyter non trouvé dans VS Code
+
+1. Ouvrir VS Code dans le dossier du projet
+2. Ouvrir un notebook
+3. Cliquer sur "Select Kernel" en haut à droite
+4. Choisir "Python Environments" → `.venv/Scripts/python.exe` (Windows) ou `.venv/bin/python` (Mac/Linux)
 
 ---
 

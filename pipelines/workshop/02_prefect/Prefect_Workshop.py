@@ -533,6 +533,96 @@ def run_single():
     return result
 
 
+def deploy_to_worker():
+    """
+    DÉPLOYER le pipeline vers le WORKER DOCKER.
+
+    DIFFÉRENCE avec serve() :
+    - serve() : Le flow s'exécute dans VOTRE processus Python (local)
+    - deploy() : Le flow s'exécute dans le WORKER DOCKER (production)
+
+    Après avoir exécuté ceci :
+    1. Votre terminal est LIBÉRÉ (pas de processus bloquant)
+    2. Le worker Docker va exécuter le flow
+    3. Ouvrir l'interface Prefect : http://localhost:4200
+    4. Aller dans Deployments > worker-training
+    5. Cliquer sur "Quick Run" pour déclencher manuellement
+    6. Ou attendre la planification (toutes les 5 minutes)
+
+    POUR VOIR LES LOGS DU WORKER :
+        docker-compose logs -f prefect-worker
+
+    POUR SUPPRIMER LE DÉPLOIEMENT :
+        Interface Prefect > Deployments > Delete
+    """
+    print("=" * 60)
+    print("DÉPLOIEMENT VERS LE WORKER DOCKER")
+    print("=" * 60)
+    print("""
+DIFFÉRENCE serve() vs deploy() :
+
+  serve()  → Le flow s'exécute ICI (votre terminal)
+             Ctrl+C arrête tout
+             Simple, bon pour apprendre
+
+  deploy() → Le flow s'exécute dans le WORKER DOCKER
+             Votre terminal est libéré
+             Architecture de production
+
+""")
+    print("Déploiement en cours...")
+    print()
+
+    # Créer le déploiement vers le work pool Docker
+    # Le worker dans docker-compose écoute "default-pool"
+    deployment_id = production_pipeline.deploy(
+        name="worker-training",
+        work_pool_name="default-pool",
+        cron="*/5 * * * *",  # Toutes les 5 minutes
+        tags=["workshop", "ml", "worker-demo"],
+        description="Pipeline exécuté par le worker Docker - toutes les 5 minutes",
+        parameters={
+            "n_estimators": 100,
+            "max_depth": 10,
+            "experiment_name": "workshop-worker",
+            "model_name": "churn-predictor-worker"
+        }
+    )
+
+    print()
+    print("=" * 60)
+    print("✅ DÉPLOIEMENT RÉUSSI !")
+    print("=" * 60)
+    print(f"""
+Le flow est maintenant déployé vers le worker Docker.
+
+PROCHAINES ÉTAPES :
+
+1. Ouvrir l'interface Prefect : http://localhost:4200
+   → Aller dans Deployments
+   → Trouver "churn-prediction-pipeline/worker-training"
+
+2. Déclencher manuellement :
+   → Cliquer sur "Quick Run"
+   → Observer l'exécution dans l'onglet "Runs"
+
+3. Voir les logs du worker :
+   docker-compose logs -f prefect-worker
+
+4. Vérifier MLflow : http://localhost:5000
+   → Expérience "workshop-worker"
+
+5. Pour supprimer le déploiement :
+   → Interface Prefect > Deployments > Delete
+
+COMPARAISON :
+  - 'deploy' (serve)  : Exécution locale, terminal bloqué
+  - 'worker-demo'     : Exécution Docker, terminal libre ← VOUS ÊTES ICI
+""")
+
+    return deployment_id
+
+
 # =============================================================================
 # PARTIE 7 : NOTIFICATIONS - Alertes Discord/Slack
 # =============================================================================
@@ -741,7 +831,7 @@ ALTERNATIVE : Mode simulation (sans vrai webhook)
 
 
 # =============================================================================
-# PARTIE 5.5 : ARTEFACTS DE PRÉTRAITEMENT
+# PARTIE 5.5 : ARTEFACTS DE PRÉTRAITEMENT (Approche Manuelle)
 # =============================================================================
 #
 # PROBLÈME :
@@ -753,6 +843,10 @@ ALTERNATIVE : Mode simulation (sans vrai webhook)
 #   Les récupérer à l'inférence.
 #
 # Ce pattern est CRITIQUE pour la production !
+#
+# NOTE PÉDAGOGIQUE :
+#   Cette approche manuelle est présentée pour comprendre le problème.
+#   En production, préférez sklearn Pipeline (voir Partie 5.6) !
 # =============================================================================
 
 @task
@@ -963,6 +1057,188 @@ Pattern de code :
 
 
 # =============================================================================
+# PARTIE 5.6 : SKLEARN PIPELINE (RECOMMANDÉ EN PRODUCTION)
+# =============================================================================
+#
+# MEILLEURE PRATIQUE :
+#   Au lieu de sauvegarder scaler et modèle séparément, combinez-les
+#   dans un sklearn Pipeline. Un seul artefact, zéro risque d'oubli !
+#
+# AVANTAGES :
+#   - Un seul artefact à gérer (pas de scaler.pkl séparé)
+#   - Impossible d'oublier le prétraitement à l'inférence
+#   - Code d'inférence ultra-simple : pipeline.predict(X)
+#   - MLflow le gère comme un modèle standard
+#
+# =============================================================================
+
+from sklearn.pipeline import Pipeline as SklearnPipeline
+
+
+@task
+def train_model_with_pipeline(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
+    n_estimators: int,
+    max_depth: int
+) -> dict:
+    """
+    Entraîner un modèle avec sklearn Pipeline.
+
+    Le Pipeline combine preprocessing + modèle en un seul objet.
+    Plus besoin de gérer le scaler séparément !
+    """
+    # Créer le pipeline : scaler + modèle en un seul objet
+    pipeline = SklearnPipeline([
+        ('scaler', StandardScaler()),
+        ('model', RandomForestClassifier(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            random_state=42
+        ))
+    ])
+
+    # Entraîner le pipeline complet (fit du scaler + fit du modèle)
+    pipeline.fit(X_train, y_train)
+
+    # Prédire (le pipeline applique automatiquement le scaling)
+    y_pred = pipeline.predict(X_test)
+    metrics = {
+        "accuracy": accuracy_score(y_test, y_pred),
+        "f1": f1_score(y_test, y_pred)
+    }
+
+    print(f"Pipeline entraîné : accuracy={metrics['accuracy']:.4f}, f1={metrics['f1']:.4f}")
+    return {"pipeline": pipeline, "metrics": metrics}
+
+
+@flow(name="pipeline-sklearn", log_prints=True)
+def pipeline_with_sklearn_pipeline(
+    n_estimators: int = 100,
+    max_depth: int = 10,
+    experiment_name: str = "workshop-sklearn-pipeline"
+):
+    """
+    Pipeline ML utilisant sklearn Pipeline (RECOMMANDÉ).
+
+    Avantages par rapport à l'approche manuelle (Partie 5.5) :
+    - Un seul artefact MLflow (pas de scaler.pkl séparé)
+    - Inférence simplifiée : pipeline.predict(X) fait tout
+    - Impossible d'oublier le prétraitement
+    """
+    print("=" * 60)
+    print("PIPELINE AVEC SKLEARN PIPELINE (RECOMMANDÉ)")
+    print("=" * 60)
+
+    # Données
+    df = load_data_with_retry()
+    df = engineer_features_cached(df)
+
+    # Préparer les données (SANS scaling - le pipeline s'en charge)
+    feature_cols = FEATURE_COLS + ['rfm_score']
+    X = df[feature_cols]
+    y = df['churned']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    # Configuration MLflow
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment(experiment_name)
+
+    with mlflow.start_run(run_name=f"sklearn-pipeline-{datetime.now().strftime('%H%M%S')}") as run:
+        mlflow.set_tag("pipeline_type", "sklearn_pipeline")
+        mlflow.set_tag("orchestrator", "prefect")
+
+        mlflow.log_params({
+            "n_estimators": n_estimators,
+            "max_depth": max_depth
+        })
+
+        # Entraîner le pipeline complet
+        result = train_model_with_pipeline(
+            X_train, X_test, y_train, y_test,
+            n_estimators, max_depth
+        )
+
+        # Logger le pipeline comme modèle (inclut scaler + model)
+        mlflow.log_metrics(result["metrics"])
+        mlflow.sklearn.log_model(result["pipeline"], artifact_path="model")
+
+        print(f"\n✅ Run ID : {run.info.run_id}")
+        print(f"✅ Pipeline complet sauvegardé (scaler + model en un seul artefact)")
+
+    return {"run_id": run.info.run_id, "metrics": result["metrics"]}
+
+
+def run_sklearn_pipeline_demo():
+    """Démonstration du pipeline sklearn (approche recommandée)."""
+    print("=" * 60)
+    print("PARTIE 5.6 : SKLEARN PIPELINE (RECOMMANDÉ)")
+    print("=" * 60)
+    print("""
+POURQUOI SKLEARN PIPELINE ?
+
+Approche manuelle (Partie 5.5) :
+  # Entraînement : 2 artefacts
+  scaler.fit_transform(X_train)
+  model.fit(X_scaled, y)
+  mlflow.log_artifact("scaler.pkl")  # Artefact 1
+  mlflow.log_model(model)            # Artefact 2
+
+  # Inférence : 3 étapes, risque d'oubli !
+  scaler = load("scaler.pkl")
+  X_scaled = scaler.transform(X)     # FACILE À OUBLIER !
+  model.predict(X_scaled)
+
+Approche sklearn Pipeline (RECOMMANDÉ) :
+  # Entraînement : 1 seul artefact
+  pipeline = Pipeline([('scaler', StandardScaler()), ('model', RF())])
+  pipeline.fit(X_train, y)
+  mlflow.log_model(pipeline)         # Tout en un !
+
+  # Inférence : 1 seule étape, impossible d'oublier !
+  pipeline = mlflow.load_model("models:/churn/1")
+  pipeline.predict(X)                # Le scaling est automatique !
+""")
+
+    result = pipeline_with_sklearn_pipeline()
+
+    print("\n" + "=" * 60)
+    print("DÉMONSTRATION DE L'INFÉRENCE SIMPLIFIÉE")
+    print("=" * 60)
+
+    # Charger le pipeline depuis MLflow
+    run_id = result["run_id"]
+    model_uri = f"runs:/{run_id}/model"
+    pipeline = mlflow.sklearn.load_model(model_uri)
+
+    # Charger de nouvelles données (PAS DE SCALING MANUEL !)
+    df = load_data()
+    df = engineer_features(df)
+
+    feature_cols = FEATURE_COLS + ['rfm_score']
+    X_new = df[feature_cols].head(5)
+
+    # Prédire directement - le pipeline gère le scaling !
+    predictions = pipeline.predict(X_new)
+    probas = pipeline.predict_proba(X_new)[:, 1]
+
+    print(f"\n✅ Prédictions sur nouvelles données (scaling automatique) :")
+    for i, (pred, proba) in enumerate(zip(predictions, probas)):
+        status = "🔴 Churn" if pred == 1 else "🟢 Retain"
+        print(f"   Client {i+1}: {status} (proba={proba:.2%})")
+
+    print("\n💡 Notez qu'on n'a PAS eu besoin de charger/appliquer le scaler !")
+    print("   Le Pipeline fait tout automatiquement.")
+
+    return result
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -1010,9 +1286,14 @@ if __name__ == "__main__":
         result = run_single()
 
     elif mode == "preprocessing" or mode == "part5.5":
-        print("\nPARTIE 5.5 : Artefacts de Prétraitement")
+        print("\nPARTIE 5.5 : Artefacts de Prétraitement (Manuel)")
         print("-" * 40)
         result = run_preprocessing_demo()
+
+    elif mode == "sklearn-pipeline" or mode == "part5.6":
+        print("\nPARTIE 5.6 : sklearn Pipeline (RECOMMANDÉ)")
+        print("-" * 40)
+        result = run_sklearn_pipeline_demo()
 
     elif mode == "deploy":
         print("\nPARTIE 6 : Déployer avec Planification (AUTOMATISATION !)")
@@ -1023,6 +1304,11 @@ if __name__ == "__main__":
         print("3. Loggue dans MLflow")
         print("\nAppuyez sur Ctrl+C pour arrêter.\n")
         deploy_with_schedule()
+
+    elif mode == "worker-demo" or mode == "worker":
+        print("\nBONUS : Déployer vers le Worker Docker")
+        print("-" * 40)
+        deploy_to_worker()
 
     elif mode == "part7" or mode == "notifications":
         run_notification_demo()
@@ -1040,18 +1326,20 @@ CONFIGURATION :
     MLflow:  http://localhost:5000
 
 MODES :
-  part1         Tasks & Flows (bases)
-  part2         Résilience (réessais)
-  part3         Efficacité (cache, parallélisme)
-  part4         Flexibilité (paramètres, sous-flows)
-  part5         Pipeline Complet avec MLflow
-  preprocessing Artefacts de prétraitement (scaler.pkl)
-  deploy        AUTOMATISATION - Déployer avec planification !
-  part7         NOTIFICATIONS - Alertes Discord/Slack
+  part1           Tasks & Flows (bases)
+  part2           Résilience (réessais)
+  part3           Efficacité (cache, parallélisme)
+  part4           Flexibilité (paramètres, sous-flows)
+  part5           Pipeline Complet avec MLflow
+  preprocessing   Prétraitement manuel (scaler.pkl séparé)
+  sklearn-pipeline ⭐ Prétraitement avec sklearn Pipeline (RECOMMANDÉ)
+  deploy          AUTOMATISATION - Exécution locale avec serve()
+  worker-demo     PRODUCTION - Exécution dans le worker Docker !
+  part7           NOTIFICATIONS - Alertes Discord/Slack
 
 DÉROULEMENT DE L'ATELIER :
   1. Exécuter part1-part5 pour apprendre les patterns
-  2. Exécuter 'preprocessing' pour le pattern scaler
+  2. Exécuter 'preprocessing' puis 'sklearn-pipeline' pour comparer
   3. Exécuter 'deploy' pour voir l'automatisation réelle
   4. Exécuter 'part7' pour configurer les alertes
   5. Ouvrir l'interface Prefect pour observer les exécutions
@@ -1062,15 +1350,19 @@ NOTIFICATIONS (mode part7) :
   - Définir la variable : DISCORD_WEBHOOK_URL ou SLACK_WEBHOOK_URL
   - Recevoir des alertes automatiques sur échec !
 
-AUTOMATISATION (mode deploy) :
-  - Déploie le flow vers Prefect
-  - Planifie l'exécution toutes les 2 minutes
-  - Observer dans l'interface Prefect : Déploiements > Exécutions
-  - Observer dans l'interface MLflow : de nouvelles expérimentations apparaissent !
+AUTOMATISATION :
+  deploy       → serve() : exécution locale, terminal bloqué
+  worker-demo  → deploy() : exécution Docker, terminal libre (production)
+
+  Comparaison :
+    - 'deploy' utilise serve() - le flow tourne dans VOTRE terminal
+    - 'worker-demo' utilise deploy() - le flow tourne dans le WORKER DOCKER
 
 Exemple :
   python Prefect_Workshop.py part1
-  python Prefect_Workshop.py preprocessing
-  python Prefect_Workshop.py deploy
+  python Prefect_Workshop.py preprocessing     # Approche manuelle (pédagogique)
+  python Prefect_Workshop.py sklearn-pipeline  # Approche recommandée !
+  python Prefect_Workshop.py deploy            # Local (Ctrl+C pour arrêter)
+  python Prefect_Workshop.py worker-demo       # Docker (terminal libéré)
   python Prefect_Workshop.py part7
 """)

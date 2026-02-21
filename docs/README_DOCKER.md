@@ -36,28 +36,19 @@ VOTRE MACHINE :
 
 ## Démarrage Rapide
 
-### Atelier Principal : MLflow + Prefect
+### Démarrer Tous les Services
 
 ```bash
-# Démarrer MLflow + Prefect (serveur + worker)
+# Démarrer MLflow + Prefect + Dagster
 docker-compose up -d
 
 # Vérifier que les services fonctionnent
 docker-compose ps
 
 # Accéder aux interfaces
-# Prefect: http://localhost:4200
 # MLflow:  http://localhost:5000
-```
-
-### Bonus : Ajouter Dagster
-
-```bash
-# Démarrer tout incluant Dagster
-docker-compose --profile dagster up -d
-
-# Accéder à l'interface Dagster
-# http://localhost:3000
+# Prefect: http://localhost:4200
+# Dagster: http://localhost:3000
 ```
 
 ---
@@ -69,8 +60,8 @@ docker-compose --profile dagster up -d
 | **mlflow** | 5000 | Suivi d'expérimentations, registre de modèles |
 | **prefect-server** | 4200 | Monitoring de flows, déploiements, planifications |
 | **prefect-worker** | - | Exécute les flows planifiés |
-| **dagster-webserver** (bonus) | 3000 | Interface graphe d'assets, matérialisations |
-| **dagster-daemon** (bonus) | - | Exécute les jobs planifiés |
+| **dagster-webserver** | 3000 | Interface graphe d'assets, matérialisations |
+| **dagster-daemon** | - | Exécute les jobs planifiés |
 
 ---
 
@@ -122,12 +113,9 @@ Maintenant observez :
 - **Interface Prefect** (http://localhost:4200) : Voir les déploiements et exécutions
 - **Interface MLflow** (http://localhost:5000) : Voir les expérimentations apparaître automatiquement
 
-### 4. Bonus : Dagster
+### 4. Explorer Dagster
 
-```bash
-# Démarrer Dagster
-docker-compose --profile dagster up -d
-```
+Dagster est déjà démarré avec `docker-compose up -d`.
 
 Ouvrir http://localhost:3000 :
 1. **Graphe d'Assets** : Voir le linéage de données
@@ -140,11 +128,8 @@ Ouvrir http://localhost:3000 :
 ## Commandes Courantes
 
 ```bash
-# Démarrer l'atelier principal (MLflow + Prefect)
+# Démarrer tous les services (MLflow + Prefect + Dagster)
 docker-compose up -d
-
-# Démarrer avec le bonus Dagster
-docker-compose --profile dagster up -d
 
 # Arrêter tous les services
 docker-compose down
@@ -160,8 +145,7 @@ docker-compose logs -f dagster-webserver
 docker-compose logs -f dagster-daemon
 
 # Reconstruire les images après modifications des Dockerfile
-docker-compose build prefect-worker
-docker-compose --profile dagster build
+docker-compose build
 
 # Redémarrer un service
 docker-compose restart prefect-worker
@@ -256,7 +240,6 @@ docker-compose down -v
 # Télécharger et construire les images
 docker-compose pull
 docker-compose build
-docker-compose --profile dagster build
 
 # Démarrer et vérifier
 docker-compose up -d

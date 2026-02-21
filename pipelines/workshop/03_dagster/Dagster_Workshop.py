@@ -21,7 +21,7 @@
 # -----------------------------------------------------------------------------
 #
 # 1. Démarrer la stack :
-#      docker-compose --profile dagster up -d
+#      docker-compose up -d
 #
 # 2. Accéder aux interfaces :
 #      - Dagster: http://localhost:3000 (assets, planifications, exécutions)
@@ -498,7 +498,7 @@ def run_from_existing_features():
 # La ligne de commande est utile, mais la puissance de Dagster est dans l'interface !
 #
 # Démarrez avec Docker :
-#   docker-compose --profile dagster up -d
+#   docker-compose up -d
 #
 # Puis ouvrez http://localhost:3000 et explorez :
 #
@@ -562,7 +562,7 @@ ATELIER DAGSTER - BONUS
 Cet atelier transforme votre pipeline Prefect en assets Dagster.
 
 CONFIGURATION (Docker - Recommandé) :
-  docker-compose --profile dagster up -d
+  docker-compose up -d
 
   Interfaces :
     Dagster: http://localhost:3000

@@ -281,6 +281,90 @@ prefect deployment run 'my-pipeline/simple'  # Terminal 4 (ou via UI)
 
 ---
 
+## 5. Essayez avec votre Docker Worker
+
+Votre `docker-compose.yml` inclut déjà un worker Prefect ! Voici comment l'utiliser.
+
+### Architecture actuelle
+
+```
+docker-compose up -d
+│
+├── prefect-server (port 4200)  ← Interface + API
+├── prefect-worker              ← Exécute les flows déployés
+└── mlflow (port 5000)          ← Tracking
+```
+
+Le worker écoute le work pool `default-pool` et exécute les flows qui y sont déployés.
+
+### Comparer serve() vs deploy()
+
+| Aspect | `serve()` | `deploy()` |
+|--------|-----------|------------|
+| Où s'exécute le flow | Localement (votre terminal) | Dans le Docker worker |
+| Processus | Votre script Python | Container Docker |
+| Arrêter | Ctrl+C | Via l'interface Prefect |
+| Production-ready | Non | Oui |
+
+### Essayez-le !
+
+```bash
+# Mode serve() - exécution locale (ce que vous connaissez)
+python pipelines/workshop/02_prefect/Prefect_Workshop.py deploy
+
+# Mode deploy() - exécution dans le Docker worker
+python pipelines/workshop/02_prefect/Prefect_Workshop.py worker-demo
+```
+
+### Code : serve() vs deploy()
+
+```python
+# serve() - Le flow s'exécute dans VOTRE processus Python
+production_pipeline.serve(
+    name="local-training",
+    cron="*/2 * * * *"
+)
+# Votre terminal reste bloqué, Ctrl+C arrête tout
+
+# deploy() - Le flow s'exécute dans le DOCKER WORKER
+production_pipeline.deploy(
+    name="worker-training",
+    work_pool_name="default-pool",
+    cron="*/2 * * * *"
+)
+# Votre terminal est libéré, le worker Docker exécute le flow
+```
+
+### Vérifier que ça fonctionne
+
+1. Exécutez `worker-demo` :
+   ```bash
+   python pipelines/workshop/02_prefect/Prefect_Workshop.py worker-demo
+   ```
+
+2. Ouvrez l'interface Prefect : http://localhost:4200
+   - Allez dans **Deployments**
+   - Trouvez `churn-prediction-pipeline/worker-training`
+   - Cliquez sur **Quick Run** pour déclencher manuellement
+
+3. Vérifiez les logs du worker :
+   ```bash
+   docker-compose logs -f prefect-worker
+   ```
+
+4. Observez l'exécution dans MLflow : http://localhost:5000
+
+### Quand utiliser quoi ?
+
+| Situation | Recommandation |
+|-----------|----------------|
+| Développement, tests | `serve()` |
+| Apprentissage Prefect | `serve()` |
+| Production, CI/CD | `deploy()` |
+| Haute disponibilité | `deploy()` + plusieurs workers |
+
+---
+
 ## Conclusion
 
 Pour l'atelier Master 2 SISE, `flow.serve()` est le choix optimal :
@@ -288,7 +372,9 @@ Pour l'atelier Master 2 SISE, `flow.serve()` est le choix optimal :
 - Résultat **visible immédiatement**
 - Transition vers `build + agent` **facile** une fois les bases acquises
 
+**Bonus** : Testez `worker-demo` pour voir la vraie architecture de production !
+
 Pour la production, évaluez vos besoins :
 - **Petite équipe, scripts simples** → `serve()` suffit
-- **CI/CD, scaling** → `build + agent`
+- **CI/CD, scaling** → `deploy()` avec work pools
 - **Entreprise, SLA** → Work pools ou Prefect Cloud

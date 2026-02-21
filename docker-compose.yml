@@ -5,12 +5,12 @@
 # Ceci exécute la stack complète d'orchestration :
 #   - MLflow: Suivi d'expérimentations et registre de modèles
 #   - Prefect: Serveur + Worker pour l'automatisation des flows
-#   - Dagster: Webserver + Daemon pour l'automatisation des assets (bonus)
+#   - Dagster: Webserver + Daemon pour l'automatisation des assets
 #
 # Utilisation :
-#   docker-compose up -d                     # MLflow + Prefect (atelier principal)
-#   docker-compose --profile dagster up -d   # + Dagster (bonus)
-#   docker-compose down                      # Tout arrêter
+#   docker-compose up -d      # Démarrer tous les services
+#   docker-compose down       # Tout arrêter
+#   docker-compose down -v    # Tout arrêter et supprimer les données
 #
 # Accès :
 #   - MLflow:  http://localhost:5000 (expérimentations, modèles)
@@ -91,7 +91,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Serveur Web Dagster (Interface) - BONUS
+  # Serveur Web Dagster (Interface)
   # ---------------------------------------------------------------------------
   dagster-webserver:
     build:
@@ -111,12 +111,10 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
-    profiles:
-      - dagster
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Daemon Dagster (exécute les planifications) - BONUS
+  # Daemon Dagster (exécute les planifications)
   # ---------------------------------------------------------------------------
   dagster-daemon:
     build:
@@ -134,8 +132,6 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
-    profiles:
-      - dagster
     restart: unless-stopped
 
 # =============================================================================

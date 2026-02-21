@@ -361,7 +361,7 @@ python pipelines/workshop/02_prefect/Prefect_Workshop.py part7
 
 ```bash
 # Lancer Dagster avec Docker (RECOMMANDÉ)
-docker-compose --profile dagster up -d
+docker-compose up -d
 # Ouvrir http://localhost:3000 et suivre les TODOs dans Dagster_Exercises.py
 
 # Référence complète (si besoin de voir la solution)

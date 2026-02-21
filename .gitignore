@@ -85,3 +85,4 @@ logs/
 *.pdf
 docs/prefect/datacamp_tutorial.md
 data/predictions_workshop.csv
+data/predictions_dagster.csv
