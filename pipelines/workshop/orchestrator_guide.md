@@ -309,9 +309,11 @@ Situé dans `01_airflow/`
 
 Situé dans `03_dagster/`
 
-- `Dagster_Workshop.py` : Apprendre la pensée centrée sur les assets
-- `Dagster_Pipeline.py` : Pipeline complet de référence
-- Utiliser l'interface Dagster pour la visualisation
+- `Dagster_Exercises.py` : **Exercices interactifs** (chargé par Docker)
+  - 20% code, 80% interaction avec l'interface web
+  - Graphe cassé à réparer (auto-câblage)
+  - Matérialisation partielle (la killer-feature !)
+- `Dagster_Workshop.py` : Référence complète (solution)
 
 ---
 
@@ -358,15 +360,12 @@ python pipelines/workshop/02_prefect/Prefect_Workshop.py part7
 ### Atelier Dagster (Bonus)
 
 ```bash
-# Ligne de commande
+# Lancer Dagster avec Docker (RECOMMANDÉ)
+docker-compose --profile dagster up -d
+# Ouvrir http://localhost:3000 et suivre les TODOs dans Dagster_Exercises.py
+
+# Référence complète (si besoin de voir la solution)
 python pipelines/workshop/03_dagster/Dagster_Workshop.py full
-
-# Pipeline complet de référence
-python pipelines/workshop/03_dagster/Dagster_Pipeline.py
-
-# Avec interface (recommandé)
-dagster dev -f pipelines/workshop/03_dagster/Dagster_Pipeline.py
-# Ouvrir http://localhost:3000
 ```
 
 ### Pipeline Airflow (Référence)

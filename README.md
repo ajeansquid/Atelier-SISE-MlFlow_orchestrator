@@ -45,11 +45,12 @@ DÉVELOPPER → SUIVRE → ENREGISTRER → SERVIR → AUTOMATISER
 
 ### Phase 3 : Bonus Dagster
 
-**Atelier Dagster** (`pipelines/workshop/03_dagster/Dagster_Workshop.py`) :
-- Transformer les tâches en assets
-- Inférence automatique des dépendances
-- Jobs et planifications pour l'automatisation
-- Lignage visuel des assets
+**Atelier Dagster** (`pipelines/workshop/03_dagster/`) :
+- `Dagster_Exercises.py` : **Exercices interactifs** (paradigme Asset vs Task - 80% UI, 20% code)
+- `Dagster_Workshop.py` : Référence complète
+- Comprendre l'auto-câblage des dépendances
+- Matérialisation partielle (la killer-feature !)
+- Métadonnées et intégration MLflow
 
 ---
 
@@ -159,15 +160,11 @@ Cela déploie un flow planifié qui s'exécute toutes les 2 minutes. Observez :
 **Bonus Dagster :**
 ```bash
 docker-compose --profile dagster up -d
-# Ouvrir http://localhost:3000
+# Ouvrir http://localhost:3000 et suivre les TODOs dans Dagster_Exercises.py
+# Le graphe est "cassé" volontairement - corrigez-le en modifiant le fichier !
 
-# Ou exécuter depuis la ligne de commande :
-python pipelines/workshop/03_dagster/Dagster_Workshop.py full       # Matérialiser tous les assets
-python pipelines/workshop/03_dagster/Dagster_Workshop.py data       # Préparation des données uniquement
-python pipelines/workshop/03_dagster/Dagster_Workshop.py selective  # Matérialisation sélective
-
-# Activer la planification dans l'interface : Overview > Schedules > churn_training_schedule
-# Observer les exécutions apparaître toutes les 2 minutes !
+# Référence (si besoin de voir la solution) :
+python pipelines/workshop/03_dagster/Dagster_Workshop.py full
 ```
 
 **Vue d'ensemble Airflow (lecture guidée) :**
@@ -196,8 +193,8 @@ Lire `pipelines/workshop/01_airflow/airflow_overview.md` pour comprendre les poi
 │   │   └── Prefect_Exercises.py      # Exercices interactifs (approche Fil Rouge)
 │   │
 │   └── 03_dagster/                   # BONUS
-│       ├── Dagster_Workshop.py       # Atelier centré sur les assets
-│       └── Dagster_Pipeline.py       # Pipeline complet de référence
+│       ├── Dagster_Exercises.py      # Exercices interactifs (chargé par Docker)
+│       └── Dagster_Workshop.py       # Référence complète (solution)
 │
 ├── docs/
 │   ├── mlflow_cheatsheet.md          # Référence rapide
