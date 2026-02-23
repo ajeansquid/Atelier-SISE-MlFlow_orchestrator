@@ -10,7 +10,7 @@
 #
 # LANCEMENT :
 #   Avec Docker (recommandé) : docker-compose up -d
-#   Sans Docker : dagster dev -f Dagster_Exercises.py
+#   Sans Docker : dg dev -f Dagster_Exercises.py
 #
 # Puis ouvrez http://localhost:3000 et observez le graphe se dessiner !
 #
@@ -72,11 +72,14 @@ from dagster import asset, Config, MaterializeResult, MetadataValue, Definitions
 # DÉFI 1 : LA MAGIE DE L'AUTO-CÂBLAGE
 # =============================================================================
 #
-# Ouvrez http://localhost:3000 après avoir lancé `dagster dev -f Dagster_Exercises.py`
+# Ouvrez http://localhost:3000 après avoir lancé `dg dev -f Dagster_Exercises.py` ou `docker-compose up -d`
+# allez dans la section "Assets" et observez le graphe.
 # Regardez le graphe : il est CASSÉ !
 #
-# Dagster cherche un asset nommé "donnees_entree" qui n'existe pas.
-# -> Corrigez l'argument pour qu'il corresponde EXACTEMENT au nom de l'asset.
+# Vous voyez un nœud isolé "donnees_entree" qui n'existe pas comme asset.
+# -> Dans le décorateur @asset, supprimez deps=["donnees_entree"]
+# -> Ajoutez raw_customer_data: pd.DataFrame comme paramètre de la fonction
+# -> Utilisez ce paramètre dans le corps de la fonction (df = raw_customer_data.copy())
 # -> Sauvegardez (Ctrl+S) et regardez l'UI se mettre à jour en temps réel !
 #
 # =============================================================================
@@ -97,22 +100,30 @@ def raw_customer_data() -> pd.DataFrame:
     })
 
 
-# TODO 1 : Renommez "donnees_entree" en "raw_customer_data"
+# TODO 1 : Supprimez deps=["donnees_entree"] du décorateur @asset
+#          Ajoutez raw_customer_data: pd.DataFrame comme paramètre de la fonction
+#          Remplacez le corps par : df = raw_customer_data.copy()
 #          Sauvegardez et observez le graphe se connecter dans l'UI !
+#
+# NOTE SUR LES DEUX APPROCHES DE DÉPENDANCE DANS DAGSTER :
+# --------------------------------------------------------
+# deps=["donnees_entree"]          → Dagster charge le fichier, mais affiche le
+#                                    nœud isolé dans le graphe (approche utilisée ici
+#                                    pour que l'UI reste accessible malgré l'erreur).
+# raw_customer_data: pd.DataFrame  → Dagster valide la dépendance au chargement et
+#                                    lève une erreur bloquante si l'asset n'existe pas.
+#                                    C'est la bonne pratique en production !
 @asset(
+    deps=["donnees_entree"],  # <-- SUPPRIMEZ cette ligne et ajoutez le paramètre typé
     description="Features préparées pour l'entraînement",
     compute_kind="pandas"
 )
-def preprocessed_features(donnees_entree: pd.DataFrame) -> pd.DataFrame:  # <-- MODIFIEZ ICI
+def preprocessed_features() -> pd.DataFrame:  # <-- AJOUTEZ raw_customer_data: pd.DataFrame
     """Nettoie et normalise les données."""
     print("🔧 Preprocessing des données...")
 
-    # Simulation de preprocessing
-    df = donnees_entree.copy()
-    df["age_normalized"] = (df["age"] - df["age"].mean()) / df["age"].std()
-    df["monetary_normalized"] = (df["monetary"] - df["monetary"].mean()) / df["monetary"].std()
-
-    return df
+    # TODO : utilisez le paramètre raw_customer_data ici (df = raw_customer_data.copy())
+    return pd.DataFrame()  # Retour vide tant que la connexion n'est pas établie
 
 
 # =============================================================================
@@ -270,7 +281,7 @@ def trained_model_with_mlflow(preprocessed_features: pd.DataFrame, config: Model
 
 
 # =============================================================================
-# DÉFINITIONS DAGSTER (obligatoire pour dagster dev)
+# DÉFINITIONS DAGSTER (obligatoire pour dg dev)
 # =============================================================================
 
 # Liste des assets à exposer
@@ -299,7 +310,7 @@ LANCEMENT RECOMMANDÉ :
 
 Puis ouvrez http://localhost:3000
 
-MODE STANDALONE (si dagster dev ne fonctionne pas) :
+MODE STANDALONE (si dg dev ne fonctionne pas) :
   python Dagster_Exercises.py
 
 PROGRESSION :
@@ -323,6 +334,6 @@ RÉFÉRENCE :
 
     if result.success:
         print("\n✅ Assets matérialisés avec succès !")
-        print("   Pour voir le graphe interactif, utilisez : dagster dev -f Dagster_Exercises.py")
+        print("   Pour voir le graphe interactif, utilisez : dg dev -f Dagster_Exercises.py")
     else:
         print("\n❌ Erreur lors de la matérialisation")

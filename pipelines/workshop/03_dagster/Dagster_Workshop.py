@@ -107,7 +107,7 @@ FEATURE_COLS = [
     group_name="ingestion",
     description="Données clients brutes chargées depuis CSV ou générées synthétiquement"
 )
-def raw_customer_data() -> pd.DataFrame:
+def ws_raw_customer_data() -> pd.DataFrame:
     """
     ASSET SOURCE : Pas de dépendances (pas de paramètres).
 
@@ -155,7 +155,7 @@ def raw_customer_data() -> pd.DataFrame:
     group_name="features",
     description="Features clients avec scores RFM et ratios"
 )
-def customer_features(raw_customer_data: pd.DataFrame) -> pd.DataFrame:
+def customer_features(ws_raw_customer_data: pd.DataFrame) -> pd.DataFrame:
     """
     ASSET DÉRIVÉ : Dépend de raw_customer_data.
 
@@ -168,7 +168,7 @@ def customer_features(raw_customer_data: pd.DataFrame) -> pd.DataFrame:
     Dans Dagster, la dépendance est DÉCLARÉE dans la signature de la fonction.
     """
     print("Calcul de l'asset customer_features...")
-    df = raw_customer_data.copy()
+    df = ws_raw_customer_data.copy()
 
     # Feature engineering (même logique que Prefect)
     df['recency_frequency_ratio'] = df['recency_days'] / (df['frequency'] + 1)
@@ -195,7 +195,7 @@ def customer_features(raw_customer_data: pd.DataFrame) -> pd.DataFrame:
     group_name="training",
     description="Modèle RandomForest entraîné avec suivi MLflow"
 )
-def trained_model(customer_features: pd.DataFrame) -> dict:
+def ws_trained_model(customer_features: pd.DataFrame) -> dict:
     """
     ASSET MODÈLE : Contient le modèle + métadonnées.
 
@@ -261,7 +261,7 @@ def trained_model(customer_features: pd.DataFrame) -> dict:
     description="Prédictions de churn pour tous les clients"
 )
 def churn_predictions(
-    trained_model: dict,
+    ws_trained_model: dict,
     customer_features: pd.DataFrame
 ) -> pd.DataFrame:
     """
@@ -285,7 +285,7 @@ def churn_predictions(
     """
     print("Génération des prédictions...")
 
-    model = trained_model["model"]
+    model = ws_trained_model["model"]
     X = customer_features[FEATURE_COLS]
 
     predictions = model.predict(X)
@@ -346,9 +346,9 @@ def saved_predictions(churn_predictions: pd.DataFrame) -> dict:
 # Dans Dagster, vous enregistrez les assets avec Definitions - pas besoin de câblage !
 
 all_assets = [
-    raw_customer_data,
+    ws_raw_customer_data,
     customer_features,
-    trained_model,
+    ws_trained_model,
     churn_predictions,
     saved_predictions,
 ]
@@ -380,7 +380,7 @@ training_job = define_asset_job(
 # Alternative : jobs sélectifs
 data_prep_job = define_asset_job(
     name="data_preparation_job",
-    selection=[AssetKey("raw_customer_data"), AssetKey("customer_features")],
+    selection=[AssetKey("ws_raw_customer_data"), AssetKey("customer_features")],
     description="Préparer les données sans entraînement"
 )
 
@@ -443,7 +443,7 @@ def run_full_pipeline():
 
     # Obtenir les sorties
     saved = result.output_for_node("saved_predictions")
-    model_data = result.output_for_node("trained_model")
+    model_data = result.output_for_node("ws_trained_model")
 
     print("\n" + "=" * 60)
     print("MATÉRIALISATION TERMINÉE")
@@ -464,7 +464,7 @@ def run_data_prep_only():
     print("=" * 60)
 
     # Matérialiser seulement jusqu'à customer_features
-    result = materialize([raw_customer_data, customer_features])
+    result = materialize([ws_raw_customer_data, customer_features])
 
     features = result.output_for_node("customer_features")
     print(f"\nDonnées préparées : {features.shape}")

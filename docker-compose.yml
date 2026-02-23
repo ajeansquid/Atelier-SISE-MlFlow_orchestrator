@@ -30,6 +30,8 @@ services:
       - "${MLFLOW_PORT:-5000}:5000"
     volumes:
       - ./mlflow_data:/mlflow
+    environment:
+      - MLFLOW_SERVER_DISABLE_SECURITY_MIDDLEWARE=true
     command: >
       mlflow server
       --host 0.0.0.0
@@ -50,7 +52,7 @@ services:
   # Serveur Prefect (API + Interface)
   # ---------------------------------------------------------------------------
   prefect-server:
-    image: prefecthq/prefect:2-python3.11
+    image: prefecthq/prefect:3-python3.11
     container_name: workshop-prefect-server
     ports:
       - "${PREFECT_PORT:-4200}:4200"
@@ -59,6 +61,7 @@ services:
     environment:
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db
+      - PREFECT_UI_API_URL=http://localhost:4200/api
     command: prefect server start --host 0.0.0.0
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
@@ -103,11 +106,11 @@ services:
     volumes:
       - ./pipelines:/app/pipelines
       - ./data:/app/data
-      - dagster-data:/app/dagster_home
+      - ./dagster_home:/app/dagster_home
     environment:
       - DAGSTER_HOME=/app/dagster_home
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-    command: dagster-webserver --host 0.0.0.0 --port 3000
+    command: dagster-webserver --host 0.0.0.0 --port 3000 -w /app/dagster_home/workspace.yaml
     depends_on:
       mlflow:
         condition: service_healthy
@@ -124,11 +127,11 @@ services:
     volumes:
       - ./pipelines:/app/pipelines
       - ./data:/app/data
-      - dagster-data:/app/dagster_home
+      - ./dagster_home:/app/dagster_home
     environment:
       - DAGSTER_HOME=/app/dagster_home
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-    command: dagster-daemon run
+    command: dagster-daemon run -w /app/dagster_home/workspace.yaml
     depends_on:
       mlflow:
         condition: service_healthy
@@ -140,5 +143,3 @@ services:
 volumes:
   prefect-data:
     name: workshop-prefect-data
-  dagster-data:
-    name: workshop-dagster-data
