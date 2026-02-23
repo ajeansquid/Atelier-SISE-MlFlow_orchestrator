@@ -1,10 +1,16 @@
 # Atelier MLflow + Orchestrateurs
 
-## Contexte
+## Introduction
 
-**Durée :** 3 heures
-**Public :** Étudiants Master 2 SISE (profils mixtes : data scientists, ML engineers, data engineers)
-**Objectif :** Apprendre les pratiques MLOps - orchestrer des pipelines ML avec planification et automatisation, suivre les expérimentations avec MLflow
+Vous avez entraîné des modèles dans des notebooks. Maintenant, passez à la production !
+
+Dans cet atelier, vous allez :
+- **Suivre vos expérimentations** avec MLflow (paramètres, métriques, modèles)
+- **Orchestrer vos pipelines** avec Prefect (réessais, cache, parallélisme)
+- **Automatiser l'exécution** avec des planifications (réentraînement quotidien)
+- **Découvrir Dagster** et son approche centrée sur les données (bonus)
+
+À la fin, vous saurez construire des pipelines ML robustes qui s'exécutent tout seuls.
 
 ---
 

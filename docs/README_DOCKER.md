@@ -79,29 +79,34 @@ docker-compose ps
 # Chercher le statut "healthy" sur mlflow et prefect-server
 ```
 
-### 2. Apprendre les Patterns (Parties 1-5)
+### 2. Apprendre les Patterns avec les Exercices
 
-Exécuter les parties de l'atelier localement pour apprendre les patterns d'orchestration :
+Suivre les exercices interactifs pour apprendre les patterns d'orchestration :
 
 ```bash
-# Installer les dépendances
+# Installer les dépendances (avec uv)
+uv sync --extra orchestrators
+
+# Ou avec pip
 pip install -r requirements.txt
 
-# Exécuter les parties de l'atelier
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part1  # Tasks & Flows
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part2  # Réessais
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part3  # Cache & Parallélisme
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part4  # Paramètres
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part5  # Pipeline Complet + MLflow
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part7  # Notifications Discord/Slack
+# Exécuter les exercices (approche Fil Rouge)
+uv run python pipelines/workshop/02_prefect/Prefect_Exercises.py etape1  # Tasks & Flows
+uv run python pipelines/workshop/02_prefect/Prefect_Exercises.py etape2  # Résilience
+uv run python pipelines/workshop/02_prefect/Prefect_Exercises.py etape3  # Cache
+uv run python pipelines/workshop/02_prefect/Prefect_Exercises.py etape4  # MLflow
+uv run python pipelines/workshop/02_prefect/Prefect_Exercises.py etape5  # Sous-flows
+uv run python pipelines/workshop/02_prefect/Prefect_Exercises.py notif   # Notifications Discord/Slack
 ```
 
-### 3. Voir l'Automatisation Réelle (Partie 6)
+> **Référence :** Si vous êtes bloqué, consultez `Prefect_Workshop.py` pour voir les solutions complètes.
+
+### 3. Voir l'Automatisation Réelle (Étape 6)
 
 Déployer un flow planifié :
 
 ```bash
-python pipelines/workshop/02_prefect/Prefect_Workshop.py deploy
+uv run python pipelines/workshop/02_prefect/Prefect_Exercises.py deploy
 ```
 
 Ceci va :

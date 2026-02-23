@@ -9,7 +9,7 @@
 #
 #   ÉTAPE 1 : Tasks & Flows (transformer les fonctions en tâches orchestrées)
 #   ÉTAPE 2 : Résilience (ajouter des réessais sur le chargement)
-#   ÉTAPE 3 : Efficacité (cacher le preprocessing coûteux)
+#   ÉTAPE 3 : Efficacité (cacher le preprocessing coûteux + parallélisme)
 #   ÉTAPE 4 : MLflow + sklearn Pipeline (tracker avec la meilleure pratique)
 #   ÉTAPE 5 : Orchestration (organiser en sous-flows)
 #   ÉTAPE 6 : Déploiement (planifier l'exécution automatique)
@@ -393,15 +393,21 @@ def run_etape2():
 
 
 # =============================================================================
-# ÉTAPE 3 : EFFICACITÉ - Cache du Preprocessing
+# ÉTAPE 3 : EFFICACITÉ - Cache du Preprocessing + Parallélisme
 # =============================================================================
 #
-# OBJECTIF : Éviter de refaire le preprocessing si les données n'ont pas changé
+# OBJECTIF : Éviter de refaire le preprocessing si les données n'ont pas changé,
+#            et entraîner plusieurs modèles simultanément
 #
-# CONCEPTS :
+# CONCEPTS CACHE :
 #   - cache_key_fn : Fonction qui génère une clé de cache (hash des inputs)
 #   - cache_expiration : Durée de validité du cache
 #   - task_input_hash : Fonction prête à l'emploi pour hasher les inputs
+#
+# CONCEPTS PARALLÉLISME :
+#   - task()       : Exécution séquentielle (attend la fin avant de continuer)
+#   - task.submit() : Exécution parallèle (retourne un Future immédiatement)
+#   - future.result() : Récupère le résultat quand la tâche est terminée
 #
 # SCÉNARIO RÉEL : Feature engineering coûteux (30 min), données qui ne changent
 # que quotidiennement → cacher pendant 1h évite 90% des recalculs !
@@ -500,6 +506,57 @@ def run_etape3():
     #
     # DÉFI 3.3 : Où NE PAS mettre de cache ? (Indice : l'entraînement du modèle
     #            avec des hyperparamètres différents ne devrait PAS être caché)
+    #
+    # DÉFI 3.4 (BONUS) : PARALLÉLISME - Entraîner deux modèles simultanément
+    # -------------------------------------------------------------------------
+    # Dans Prefect, appeler une tâche normalement = séquentiel.
+    # Utiliser .submit() = parallèle : les deux tâches démarrent en même temps !
+    #
+    # Complétez ce flow pour entraîner RF et GB en parallèle :
+    # -------------------------------------------------------------------------
+    from prefect import flow, task
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+    from sklearn.metrics import accuracy_score
+    from sklearn.model_selection import train_test_split
+
+    @task
+    def train_rf(X_train, y_train, X_test, y_test) -> dict:
+        model = RandomForestClassifier(n_estimators=50, random_state=42)
+        model.fit(X_train, y_train)
+        return {"name": "RandomForest", "accuracy": accuracy_score(y_test, model.predict(X_test))}
+
+    @task
+    def train_gb(X_train, y_train, X_test, y_test) -> dict:
+        model = GradientBoostingClassifier(n_estimators=50, random_state=42)
+        model.fit(X_train, y_train)
+        return {"name": "GradientBoosting", "accuracy": accuracy_score(y_test, model.predict(X_test))}
+
+    @flow(name="parallel-training-demo", log_prints=True)
+    def parallel_training_demo():
+        data = load_churn_data(DATA_PATH)
+        X, y = preprocess_data(data)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # TODO : Remplacez les appels normaux par .submit() pour les lancer en parallèle
+        # VERSION SÉQUENTIELLE (à transformer) :
+        rf = train_rf(X_train, y_train, X_test, y_test)   # démarre, attend la fin
+        gb = train_gb(X_train, y_train, X_test, y_test)   # démarre APRÈS rf
+
+        # VERSION PARALLÈLE (à décommenter après avoir compris l'idée) :
+        # rf_future = train_rf.submit(X_train, y_train, X_test, y_test)  # démarre immédiatement
+        # gb_future = train_gb.submit(X_train, y_train, X_test, y_test)  # démarre aussi !
+        # rf, gb = rf_future.result(), gb_future.result()
+
+        best = max([rf, gb], key=lambda x: x["accuracy"])
+        print(f"Meilleur modèle : {best['name']} ({best['accuracy']:.4f})")
+
+    print("\n" + "=" * 60)
+    print("DÉFI 3.4 : PARALLÉLISME")
+    print("=" * 60)
+    print("SÉQUENTIEL → rf démarre, finit, PUIS gb démarre")
+    print("PARALLÈLE  → rf ET gb démarrent en même temps")
+    print("Remplacez les appels normaux par .submit() dans parallel_training_demo()\n")
+    parallel_training_demo()
     # -------------------------------------------------------------------------
 
     # Rappel : Pour exécuter cette étape, utilisez la commande :
