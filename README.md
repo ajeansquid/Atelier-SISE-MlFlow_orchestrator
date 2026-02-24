@@ -112,7 +112,7 @@ VOTRE MACHINE :
 ### 1. Cloner et Configurer l'Environnement
 
 ```bash
-git clone <url-du-repo>
+git clone https://github.com/ajeansquid/Atelier-SISE-MlFlow_orchestrator
 cd Atelier-SISE-MlFlow_orchestrator
 
 # Copier le fichier de configuration
