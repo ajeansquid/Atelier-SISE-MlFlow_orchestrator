@@ -51,8 +51,6 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, f1_score
-import joblib
-import tempfile
 import time
 import random
 import os
@@ -831,411 +829,22 @@ ALTERNATIVE : Mode simulation (sans vrai webhook)
 
 
 # =============================================================================
-# PARTIE 5.5 : ARTEFACTS DE PRÉTRAITEMENT (Approche Manuelle)
+# NOTE PÉDAGOGIQUE : PATTERNS DE PRÉTRAITEMENT
 # =============================================================================
 #
-# PROBLÈME :
-#   Votre modèle nécessite un scaler/encoder. À l'inférence, vous devez
-#   utiliser LE MÊME scaler que pendant l'entraînement !
+# Les patterns de preprocessing (scaler.pkl, sklearn Pipeline) sont
+# couverts en détail dans les notebooks :
+#   - 01b_mlflow_transition.ipynb (section 2.3)
+#   - 02_mlflow_organized.ipynb (sections 8.1-8.6, comparaison complète)
 #
-# SOLUTION :
-#   Sauvegarder les artefacts de prétraitement dans MLflow.
-#   Les récupérer à l'inférence.
+# Ce fichier se concentre sur l'ORCHESTRATION avec Prefect.
 #
-# Ce pattern est CRITIQUE pour la production !
-#
-# NOTE PÉDAGOGIQUE :
-#   Cette approche manuelle est présentée pour comprendre le problème.
-#   En production, préférez sklearn Pipeline (voir Partie 5.6) !
-# =============================================================================
-
-@task
-def preprocess_and_save_artifacts(df: pd.DataFrame, run_id: str = None) -> tuple:
-    """
-    Prétraiter les données ET sauvegarder les artefacts dans MLflow.
-
-    Ce pattern est essentiel :
-    - Pendant l'entraînement : fit_transform + sauvegarder le scaler
-    - Pendant l'inférence : charger le scaler + transform (pas fit !)
-
-    Retourne :
-    - X_train, X_test, y_train, y_test : données prétraitées
-    - scaler : l'objet scaler (utile pour l'inférence immédiate)
-    """
-    feature_cols = FEATURE_COLS + ['rfm_score']
-    X = df[feature_cols]
-    y = df['churned']
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    # Créer et ajuster le scaler
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    # Convertir en DataFrame pour garder les noms de colonnes
-    X_train_scaled = pd.DataFrame(X_train_scaled, columns=feature_cols, index=X_train.index)
-    X_test_scaled = pd.DataFrame(X_test_scaled, columns=feature_cols, index=X_test.index)
-
-    # Sauvegarder le scaler dans MLflow (si on est dans un run)
-    if mlflow.active_run():
-        with tempfile.TemporaryDirectory() as tmpdir:
-            scaler_path = os.path.join(tmpdir, "scaler.pkl")
-            joblib.dump(scaler, scaler_path)
-            mlflow.log_artifact(scaler_path, artifact_path="preprocessing")
-            print(f"✅ Scaler sauvegardé dans MLflow : preprocessing/scaler.pkl")
-
-    return X_train_scaled, X_test_scaled, y_train, y_test, scaler
-
-
-@task
-def load_preprocessing_artifacts(run_id: str) -> StandardScaler:
-    """
-    Charger les artefacts de prétraitement depuis MLflow.
-
-    Utilisé pendant l'inférence pour appliquer la même transformation
-    que pendant l'entraînement.
-    """
-    from mlflow.tracking import MlflowClient
-
-    client = MlflowClient()
-
-    # Télécharger l'artefact du scaler
-    artifact_path = client.download_artifacts(run_id, "preprocessing/scaler.pkl")
-    scaler = joblib.load(artifact_path)
-
-    print(f"✅ Scaler chargé depuis le run : {run_id[:8]}...")
-    return scaler
-
-
-@task
-def train_model_with_preprocessing(
-    X_train: pd.DataFrame,
-    X_test: pd.DataFrame,
-    y_train: pd.Series,
-    y_test: pd.Series,
-    n_estimators: int,
-    max_depth: int
-) -> dict:
-    """
-    Entraîner un modèle avec des données prétraitées.
-
-    Note : Les features sont déjà scalées par preprocess_and_save_artifacts.
-    """
-    model = RandomForestClassifier(
-        n_estimators=n_estimators,
-        max_depth=max_depth,
-        random_state=42
-    )
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-    metrics = {
-        "accuracy": accuracy_score(y_test, y_pred),
-        "f1": f1_score(y_test, y_pred)
-    }
-
-    print(f"Modèle entraîné : accuracy={metrics['accuracy']:.4f}, f1={metrics['f1']:.4f}")
-    return {"model": model, "metrics": metrics}
-
-
-@flow(name="pipeline-with-preprocessing", log_prints=True)
-def pipeline_with_preprocessing(
-    n_estimators: int = 100,
-    max_depth: int = 10,
-    experiment_name: str = "workshop-preprocessing"
-):
-    """
-    Pipeline complet avec gestion des artefacts de prétraitement.
-
-    Ce flow démontre le pattern production-ready :
-    1. Charger les données
-    2. Prétraiter ET sauvegarder le scaler
-    3. Entraîner le modèle
-    4. Logger le modèle (le scaler est déjà loggé)
-
-    À l'inférence, il faudra :
-    1. Charger le modèle depuis MLflow
-    2. Charger le scaler depuis les artefacts
-    3. Appliquer scaler.transform() (pas fit_transform !)
-    4. Prédire
-    """
-    print("=" * 60)
-    print("PIPELINE AVEC ARTEFACTS DE PRÉTRAITEMENT")
-    print("=" * 60)
-
-    # Données
-    df = load_data_with_retry()
-    df = engineer_features_cached(df)
-
-    # Configuration MLflow
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(experiment_name)
-
-    with mlflow.start_run(run_name=f"preprocessing-{datetime.now().strftime('%H%M%S')}") as run:
-        # Tag pour indiquer que ce modèle nécessite un prétraitement
-        mlflow.set_tag("requires_scaling", "true")
-        mlflow.set_tag("orchestrator", "prefect")
-
-        mlflow.log_params({
-            "n_estimators": n_estimators,
-            "max_depth": max_depth
-        })
-
-        # Prétraiter ET sauvegarder le scaler
-        X_train, X_test, y_train, y_test, scaler = preprocess_and_save_artifacts(df)
-
-        # Entraîner
-        result = train_model_with_preprocessing(
-            X_train, X_test, y_train, y_test,
-            n_estimators, max_depth
-        )
-
-        # Logger les métriques et le modèle
-        mlflow.log_metrics(result["metrics"])
-        mlflow.sklearn.log_model(result["model"], name="model")
-
-        print(f"\n✅ Run ID : {run.info.run_id}")
-        print(f"✅ Artefacts sauvegardés : model/ et preprocessing/scaler.pkl")
-
-    return {"run_id": run.info.run_id, "metrics": result["metrics"]}
-
-
-def run_preprocessing_demo():
-    """Démonstration du pipeline avec artefacts de prétraitement."""
-    print("=" * 60)
-    print("PARTIE 5.5 : ARTEFACTS DE PRÉTRAITEMENT")
-    print("=" * 60)
-    print("""
-Ce pattern est CRITIQUE pour la production !
-
-PROBLÈME :
-  Votre modèle utilise un StandardScaler. Si vous refaites fit()
-  sur de nouvelles données, l'échelle sera différente !
-
-SOLUTION :
-  1. Pendant l'entraînement : sauvegarder le scaler dans MLflow
-  2. Pendant l'inférence : charger et utiliser le MÊME scaler
-
-Pattern de code :
-  # Entraînement
-  scaler.fit_transform(X_train)
-  mlflow.log_artifact("scaler.pkl", "preprocessing")
-
-  # Inférence
-  scaler = load_artifact("preprocessing/scaler.pkl")
-  X_scaled = scaler.transform(X_new)  # PAS fit_transform !
-""")
-
-    result = pipeline_with_preprocessing()
-
-    print("\n" + "=" * 60)
-    print("DÉMONSTRATION DE L'INFÉRENCE")
-    print("=" * 60)
-
-    # Démontrer le chargement du scaler
-    run_id = result["run_id"]
-    scaler = load_preprocessing_artifacts(run_id)
-
-    # Charger de nouvelles données et appliquer le scaler
-    df = load_data()
-    df = engineer_features(df)
-
-    feature_cols = FEATURE_COLS + ['rfm_score']
-    X_new = df[feature_cols].head(5)
-
-    # Appliquer le scaler (transform, pas fit_transform !)
-    X_scaled = scaler.transform(X_new)
-
-    print(f"\n✅ Nouvelles données scalées avec le même scaler :")
-    print(f"   Shape : {X_scaled.shape}")
-    print(f"   Le modèle peut maintenant prédire sur ces données")
-
-    return result
-
-
-# =============================================================================
-# PARTIE 5.6 : SKLEARN PIPELINE (RECOMMANDÉ EN PRODUCTION)
-# =============================================================================
-#
-# MEILLEURE PRATIQUE :
-#   Au lieu de sauvegarder scaler et modèle séparément, combinez-les
-#   dans un sklearn Pipeline. Un seul artefact, zéro risque d'oubli !
-#
-# AVANTAGES :
-#   - Un seul artefact à gérer (pas de scaler.pkl séparé)
-#   - Impossible d'oublier le prétraitement à l'inférence
-#   - Code d'inférence ultra-simple : pipeline.predict(X)
-#   - MLflow le gère comme un modèle standard
+# RÉSUMÉ DES MEILLEURES PRATIQUES :
+#   - Utilisez sklearn Pipeline pour combiner scaler + modèle en UN artefact
+#   - Loggez le pipeline complet dans MLflow : mlflow.sklearn.log_model(pipeline)
+#   - À l'inférence : pipeline.predict(X) applique automatiquement le scaling
 #
 # =============================================================================
-
-from sklearn.pipeline import Pipeline as SklearnPipeline
-
-
-@task
-def train_model_with_pipeline(
-    X_train: pd.DataFrame,
-    X_test: pd.DataFrame,
-    y_train: pd.Series,
-    y_test: pd.Series,
-    n_estimators: int,
-    max_depth: int
-) -> dict:
-    """
-    Entraîner un modèle avec sklearn Pipeline.
-
-    Le Pipeline combine preprocessing + modèle en un seul objet.
-    Plus besoin de gérer le scaler séparément !
-    """
-    # Créer le pipeline : scaler + modèle en un seul objet
-    pipeline = SklearnPipeline([
-        ('scaler', StandardScaler()),
-        ('model', RandomForestClassifier(
-            n_estimators=n_estimators,
-            max_depth=max_depth,
-            random_state=42
-        ))
-    ])
-
-    # Entraîner le pipeline complet (fit du scaler + fit du modèle)
-    pipeline.fit(X_train, y_train)
-
-    # Prédire (le pipeline applique automatiquement le scaling)
-    y_pred = pipeline.predict(X_test)
-    metrics = {
-        "accuracy": accuracy_score(y_test, y_pred),
-        "f1": f1_score(y_test, y_pred)
-    }
-
-    print(f"Pipeline entraîné : accuracy={metrics['accuracy']:.4f}, f1={metrics['f1']:.4f}")
-    return {"pipeline": pipeline, "metrics": metrics}
-
-
-@flow(name="pipeline-sklearn", log_prints=True)
-def pipeline_with_sklearn_pipeline(
-    n_estimators: int = 100,
-    max_depth: int = 10,
-    experiment_name: str = "workshop-sklearn-pipeline"
-):
-    """
-    Pipeline ML utilisant sklearn Pipeline (RECOMMANDÉ).
-
-    Avantages par rapport à l'approche manuelle (Partie 5.5) :
-    - Un seul artefact MLflow (pas de scaler.pkl séparé)
-    - Inférence simplifiée : pipeline.predict(X) fait tout
-    - Impossible d'oublier le prétraitement
-    """
-    print("=" * 60)
-    print("PIPELINE AVEC SKLEARN PIPELINE (RECOMMANDÉ)")
-    print("=" * 60)
-
-    # Données
-    df = load_data_with_retry()
-    df = engineer_features_cached(df)
-
-    # Préparer les données (SANS scaling - le pipeline s'en charge)
-    feature_cols = FEATURE_COLS + ['rfm_score']
-    X = df[feature_cols]
-    y = df['churned']
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    # Configuration MLflow
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(experiment_name)
-
-    with mlflow.start_run(run_name=f"sklearn-pipeline-{datetime.now().strftime('%H%M%S')}") as run:
-        mlflow.set_tag("pipeline_type", "sklearn_pipeline")
-        mlflow.set_tag("orchestrator", "prefect")
-
-        mlflow.log_params({
-            "n_estimators": n_estimators,
-            "max_depth": max_depth
-        })
-
-        # Entraîner le pipeline complet
-        result = train_model_with_pipeline(
-            X_train, X_test, y_train, y_test,
-            n_estimators, max_depth
-        )
-
-        # Logger le pipeline comme modèle (inclut scaler + model)
-        mlflow.log_metrics(result["metrics"])
-        mlflow.sklearn.log_model(result["pipeline"], artifact_path="model")
-
-        print(f"\n✅ Run ID : {run.info.run_id}")
-        print(f"✅ Pipeline complet sauvegardé (scaler + model en un seul artefact)")
-
-    return {"run_id": run.info.run_id, "metrics": result["metrics"]}
-
-
-def run_sklearn_pipeline_demo():
-    """Démonstration du pipeline sklearn (approche recommandée)."""
-    print("=" * 60)
-    print("PARTIE 5.6 : SKLEARN PIPELINE (RECOMMANDÉ)")
-    print("=" * 60)
-    print("""
-POURQUOI SKLEARN PIPELINE ?
-
-Approche manuelle (Partie 5.5) :
-  # Entraînement : 2 artefacts
-  scaler.fit_transform(X_train)
-  model.fit(X_scaled, y)
-  mlflow.log_artifact("scaler.pkl")  # Artefact 1
-  mlflow.log_model(model)            # Artefact 2
-
-  # Inférence : 3 étapes, risque d'oubli !
-  scaler = load("scaler.pkl")
-  X_scaled = scaler.transform(X)     # FACILE À OUBLIER !
-  model.predict(X_scaled)
-
-Approche sklearn Pipeline (RECOMMANDÉ) :
-  # Entraînement : 1 seul artefact
-  pipeline = Pipeline([('scaler', StandardScaler()), ('model', RF())])
-  pipeline.fit(X_train, y)
-  mlflow.log_model(pipeline)         # Tout en un !
-
-  # Inférence : 1 seule étape, impossible d'oublier !
-  pipeline = mlflow.load_model("models:/churn/1")
-  pipeline.predict(X)                # Le scaling est automatique !
-""")
-
-    result = pipeline_with_sklearn_pipeline()
-
-    print("\n" + "=" * 60)
-    print("DÉMONSTRATION DE L'INFÉRENCE SIMPLIFIÉE")
-    print("=" * 60)
-
-    # Charger le pipeline depuis MLflow
-    run_id = result["run_id"]
-    model_uri = f"runs:/{run_id}/model"
-    pipeline = mlflow.sklearn.load_model(model_uri)
-
-    # Charger de nouvelles données (PAS DE SCALING MANUEL !)
-    df = load_data()
-    df = engineer_features(df)
-
-    feature_cols = FEATURE_COLS + ['rfm_score']
-    X_new = df[feature_cols].head(5)
-
-    # Prédire directement - le pipeline gère le scaling !
-    predictions = pipeline.predict(X_new)
-    probas = pipeline.predict_proba(X_new)[:, 1]
-
-    print(f"\n✅ Prédictions sur nouvelles données (scaling automatique) :")
-    for i, (pred, proba) in enumerate(zip(predictions, probas)):
-        status = "🔴 Churn" if pred == 1 else "🟢 Retain"
-        print(f"   Client {i+1}: {status} (proba={proba:.2%})")
-
-    print("\n💡 Notez qu'on n'a PAS eu besoin de charger/appliquer le scaler !")
-    print("   Le Pipeline fait tout automatiquement.")
-
-    return result
 
 
 # =============================================================================
@@ -1285,16 +894,6 @@ if __name__ == "__main__":
         print("-" * 40)
         result = run_single()
 
-    elif mode == "preprocessing" or mode == "part5.5":
-        print("\nPARTIE 5.5 : Artefacts de Prétraitement (Manuel)")
-        print("-" * 40)
-        result = run_preprocessing_demo()
-
-    elif mode == "sklearn-pipeline" or mode == "part5.6":
-        print("\nPARTIE 5.6 : sklearn Pipeline (RECOMMANDÉ)")
-        print("-" * 40)
-        result = run_sklearn_pipeline_demo()
-
     elif mode == "deploy":
         print("\nPARTIE 6 : Déployer avec Planification (AUTOMATISATION !)")
         print("-" * 40)
@@ -1331,19 +930,20 @@ MODES :
   part3           Efficacité (cache, parallélisme)
   part4           Flexibilité (paramètres, sous-flows)
   part5           Pipeline Complet avec MLflow
-  preprocessing   Prétraitement manuel (scaler.pkl séparé)
-  sklearn-pipeline ⭐ Prétraitement avec sklearn Pipeline (RECOMMANDÉ)
   deploy          AUTOMATISATION - Exécution locale avec serve()
   worker-demo     PRODUCTION - Exécution dans le worker Docker !
   part7           NOTIFICATIONS - Alertes Discord/Slack
 
 DÉROULEMENT DE L'ATELIER :
-  1. Exécuter part1-part5 pour apprendre les patterns
-  2. Exécuter 'preprocessing' puis 'sklearn-pipeline' pour comparer
-  3. Exécuter 'deploy' pour voir l'automatisation réelle
+  1. Exécuter part1-part5 pour apprendre les patterns d'orchestration
+  2. Exécuter 'deploy' pour voir l'automatisation réelle
+  3. Exécuter 'worker-demo' pour déployer vers le worker Docker
   4. Exécuter 'part7' pour configurer les alertes
   5. Ouvrir l'interface Prefect pour observer les exécutions
   6. Ouvrir l'interface MLflow pour voir les expérimentations
+
+NOTE : Les patterns de preprocessing (scaler.pkl, sklearn Pipeline) sont
+       couverts dans les notebooks (01b, 02_mlflow_organized).
 
 NOTIFICATIONS (mode part7) :
   - Créer un webhook Discord ou Slack
@@ -1359,10 +959,9 @@ AUTOMATISATION :
     - 'worker-demo' utilise deploy() - le flow tourne dans le WORKER DOCKER
 
 Exemple :
-  python Prefect_Workshop.py part1
-  python Prefect_Workshop.py preprocessing     # Approche manuelle (pédagogique)
-  python Prefect_Workshop.py sklearn-pipeline  # Approche recommandée !
-  python Prefect_Workshop.py deploy            # Local (Ctrl+C pour arrêter)
-  python Prefect_Workshop.py worker-demo       # Docker (terminal libéré)
-  python Prefect_Workshop.py part7
+  python Prefect_Workshop.py part1       # Apprendre les bases
+  python Prefect_Workshop.py part5       # Pipeline complet avec MLflow
+  python Prefect_Workshop.py deploy      # Local (Ctrl+C pour arrêter)
+  python Prefect_Workshop.py worker-demo # Docker (terminal libéré)
+  python Prefect_Workshop.py part7       # Notifications Discord/Slack
 """)

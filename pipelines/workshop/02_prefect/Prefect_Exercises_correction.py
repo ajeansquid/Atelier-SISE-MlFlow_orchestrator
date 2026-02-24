@@ -211,6 +211,7 @@ def run_etape1():
     # TODO : Ajoutez le décorateur @task à cette fonction
     # INDICE : @task se place juste au-dessus de "def"
     # -------------------------------------------------------------------------
+    @task(name="chargement-donnees")
     def load_data() -> pd.DataFrame:
         """Charger les données clients."""
         return load_churn_data(DATA_PATH)
@@ -218,6 +219,7 @@ def run_etape1():
     # -------------------------------------------------------------------------
     # TODO : Ajoutez le décorateur @task à cette fonction
     # -------------------------------------------------------------------------
+    @task(name="Preparation-features")
     def prepare_features(df: pd.DataFrame) -> tuple:
         """Préparer les features."""
         return preprocess_data(df)
@@ -225,14 +227,21 @@ def run_etape1():
     # -------------------------------------------------------------------------
     # TODO : Ajoutez le décorateur @task à cette fonction
     # -------------------------------------------------------------------------
+    @task(name="entrainement-modele")
     def train(X: pd.DataFrame, y: pd.Series) -> dict:
         """Entraîner le modèle."""
         return train_model(X, y)
+    
+    @task(name="sauvegarde-predictions")
+    def save_pred(df: pd.DataFrame, model, feature_cols: list) -> str:
+        """Sauvegarder les prédictions."""
+        return save_predictions(df, model, feature_cols)
 
     # -------------------------------------------------------------------------
     # TODO : Créez un flow qui orchestre ces tâches
     # INDICE : @flow(name="churn-pipeline-v1", log_prints=True)
     # -------------------------------------------------------------------------
+    @flow(name="churn-pipeline-v1", log_prints=True)
     def churn_pipeline_v1():
         """
         Pipeline de prédiction de Churn - Version 1
@@ -244,10 +253,10 @@ def run_etape1():
         4. Retournez result
         """
         # TODO : Complétez le pipeline
-        data = None       # <-- Remplacez par load_data()
-        X, y = None, None  # <-- Remplacez par prepare_features(data)
-        result = None     # <-- Remplacez par train(X, y)
-
+        data = load_data()       # <-- Remplacez par load_data()
+        X, y = prepare_features(data)  # <-- Remplacez par prepare_features(data)
+        result = train(X, y)     # <-- Remplacez par train(X, y)
+        save_pred(data, result['model'], result['feature_cols'])
         if result:
             print(f"🎉 Pipeline terminé ! Accuracy : {result['metrics']['accuracy']:.4f}")
 
@@ -271,8 +280,8 @@ def run_etape1():
     except Exception as e:
         print(f"\n❌ Erreur : {e}")
         print("   INDICE : Avez-vous ajouté les décorateurs @task et @flow ?")
-
-    # Rappel : Pour exécuter cette étape, utilisez la commande :
+        
+    # Rappel : Pour éxécuter cette étape, utilisez la commande :
     # uv run .\pipelines\workshop\02_prefect\Prefect_Exercises.py etape1 (depuis le terminal à la racine du projet)
 
     # -------------------------------------------------------------------------
@@ -324,7 +333,7 @@ def run_etape2():
     # TODO : Configurez cette tâche pour réessayer 3 fois avec backoff [5, 10, 20]
     # INDICE : @task(retries=3, retry_delay_seconds=[5, 10, 20])
     # -------------------------------------------------------------------------
-    @task  # <-- Ajoutez les paramètres retries et retry_delay_seconds
+    @task(retries=3, retry_delay_seconds=[2, 8, 32])
     def load_data_with_retry() -> pd.DataFrame:
         """
         Charger les données avec simulation d'échecs.
@@ -333,7 +342,7 @@ def run_etape2():
         requête vers une base de données ou une API.
         """
         # Simulation d'échec transitoire (40% de chance d'échec)
-        if random.random() < 0.4:
+        if random.random() < 0.8:
             print("❌ Connexion échouée ! (simulation)")
             raise ConnectionError("Database temporarily unavailable")
 
@@ -382,13 +391,13 @@ def run_etape2():
     # DÉFI 2.2 : Ajoutez un backoff plus agressif : [2, 8, 32] secondes.
     #            Chronométrez le temps total en cas d'échecs multiples.
     #            (Globalement, vous devriez voir des temps d'attente de plus en plus longs : 2s, puis 8s, puis 32s
-    #            et avec peu de retry c'est possible que le Flux s'arrête)
+    #            (et avec peu de retry c'est possible que le Flux s'arrête)
     #
     # DÉFI 2.3 : Dans un vrai projet, où mettriez-vous les réessais ?
     #            (Indice : pas sur le preprocessing !)
     # -------------------------------------------------------------------------
-
-    # Rappel : Pour exécuter cette étape, utilisez la commande :
+    
+    # Rappel : Pour éxécuter cette étape, utilisez la commande :
     # uv run .\pipelines\workshop\02_prefect\Prefect_Exercises.py etape2 (depuis le terminal à la racine du projet)
 
 
@@ -405,7 +414,7 @@ def run_etape2():
 #   - task_input_hash : Fonction prête à l'emploi pour hasher les inputs
 #
 # CONCEPTS PARALLÉLISME :
-#   - task()       : Exécution séquentielle (attend la fin avant de continuer)
+#   - task()        : Exécution séquentielle (attend la fin avant de continuer)
 #   - task.submit() : Exécution parallèle (retourne un Future immédiatement)
 #   - future.result() : Récupère le résultat quand la tâche est terminée
 #
@@ -436,7 +445,7 @@ def run_etape3():
     # TODO : Activez le cache sur cette tâche
     # INDICE : @task(cache_key_fn=task_input_hash, cache_expiration=timedelta(hours=1))
     # -------------------------------------------------------------------------
-    @task  # <-- Ajoutez les paramètres de cache ici
+    @task(cache_key_fn=task_input_hash, cache_expiration=timedelta(hours=1))
     def prepare_features_cached(df: pd.DataFrame) -> tuple:
         """
         Preprocessing avec cache.
@@ -511,10 +520,7 @@ def run_etape3():
     # -------------------------------------------------------------------------
     # Dans Prefect, appeler une tâche normalement = séquentiel.
     # Utiliser .submit() = parallèle : les deux tâches démarrent en même temps !
-    #
-    # Complétez ce flow pour entraîner RF et GB en parallèle :
     # -------------------------------------------------------------------------
-    from prefect import flow, task
     from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
     from sklearn.metrics import accuracy_score
     from sklearn.model_selection import train_test_split
@@ -537,15 +543,10 @@ def run_etape3():
         X, y = preprocess_data(data)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        # TODO : Remplacez les appels normaux par .submit() pour les lancer en parallèle
-        # VERSION SÉQUENTIELLE (à transformer) :
-        rf = train_rf(X_train, y_train, X_test, y_test)   # démarre, attend la fin
-        gb = train_gb(X_train, y_train, X_test, y_test)   # démarre APRÈS rf
-
-        # VERSION PARALLÈLE (à décommenter après avoir compris l'idée) :
-        # rf_future = train_rf.submit(X_train, y_train, X_test, y_test)  # démarre immédiatement
-        # gb_future = train_gb.submit(X_train, y_train, X_test, y_test)  # démarre aussi !
-        # rf, gb = rf_future.result(), gb_future.result()
+        # VERSION PARALLÈLE avec .submit() :
+        rf_future = train_rf.submit(X_train, y_train, X_test, y_test)  # démarre immédiatement
+        gb_future = train_gb.submit(X_train, y_train, X_test, y_test)  # démarre aussi !
+        rf, gb = rf_future.result(), gb_future.result()                 # attend les deux
 
         best = max([rf, gb], key=lambda x: x["accuracy"])
         print(f"Meilleur modèle : {best['name']} ({best['accuracy']:.4f})")
@@ -554,13 +555,11 @@ def run_etape3():
     print("DÉFI 3.4 : PARALLÉLISME")
     print("=" * 60)
     print("SÉQUENTIEL → rf démarre, finit, PUIS gb démarre")
-    print("PARALLÈLE  → rf ET gb démarrent en même temps")
-    print("Remplacez les appels normaux par .submit() dans parallel_training_demo()\n")
+    print("PARALLÈLE  → rf ET gb démarrent en même temps (.submit())")
+    print("Observez dans l'UI Prefect : les deux tâches s'exécutent simultanément !\n")
     parallel_training_demo()
     # -------------------------------------------------------------------------
-
-    # Rappel : Pour exécuter cette étape, utilisez la commande :
-    # uv run .\pipelines\workshop\02_prefect\Prefect_Exercises.py etape3 (depuis le terminal à la racine du projet)
+    # Rappel : Pour éxecuter cette étape :
 
 
 # =============================================================================
@@ -675,33 +674,71 @@ On combine tout dans un Pipeline :
         # ---------------------------------------------------------------------
         # TODO : Configurez MLflow
         # INDICE : mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-        #          mlflow.set_experiment(experiment_name)
+        #          mlflow.set_experiment(experiment_name='prefect-training')
         # ---------------------------------------------------------------------
         pass  # <-- Remplacez par la configuration MLflow
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        mlflow.set_experiment(experiment_name='prefect-training')
 
         # ---------------------------------------------------------------------
         # TODO : Démarrez un run MLflow et loggez le pipeline
         # INDICE : with mlflow.start_run(run_name="prefect-training"):
         # ---------------------------------------------------------------------
         # Décommentez et complétez :
-        #
-        # with mlflow.start_run(run_name=f"training-{datetime.now().strftime('%H%M%S')}"):
-        #
-        #     # TODO : Loggez les paramètres
-        #     # mlflow.log_params({"n_estimators": n_estimators, "max_depth": max_depth})
-        #
-        #     # TODO : Loggez les métriques
-        #     # mlflow.log_metrics({"accuracy": accuracy, "f1": f1})
-        #
-        #     # TODO : Loggez le PIPELINE (scaler + modèle en UN artefact !)
-        #     # mlflow.sklearn.log_model(pipeline, artifact_path="model")
-        #
-        #     run_id = mlflow.active_run().info.run_id
-        #     print(f"✅ MLflow Run ID : {run_id}")
-        #     print(f"   Accuracy : {accuracy:.4f}, F1 : {f1:.4f}")
-        #     print(f"   ⭐ Pipeline loggé (scaler + model en UN artefact)")
-        #
-        # return {"pipeline": pipeline, "accuracy": accuracy, "f1": f1, "run_id": run_id}
+        
+        with mlflow.start_run(run_name=f"training-{datetime.now().strftime('%H%M%S')}"):
+        
+            # TODO : Loggez les paramètres
+            mlflow.log_params({"n_estimators": n_estimators, "max_depth": max_depth})
+        
+            # TODO : Loggez les métriques
+            mlflow.log_metrics({"accuracy": accuracy, "f1": f1})
+        
+            # TODO : Loggez le PIPELINE (scaler + modèle en UN artefact !)
+            mlflow.sklearn.log_model(pipeline, name="model")
+            # NOTE : Par défaut, MLflow sérialise en pickle (risque de sécurité).
+            # Alternatives possibles selon le contexte :
+            #
+            # - skops (recommandé en production, Python uniquement) :
+            #   mlflow.sklearn.log_model(pipeline, name="model", serialization_format="skops")
+            #   ✅ Plus sûr (pas d'exécution de code arbitraire à la désérialisation)
+            #   ✅ Supporté nativement par MLflow
+            #   ❌ Plus récent → ecosystème moins mature, moins de ressources en ligne
+            #   ❌ Moins flexible (certains objets custom non supportés)
+            #   ❌ Python uniquement, comme pickle
+            #
+            # - ONNX (interopérable, multi-langages) :
+            #   ✅ Permet de servir le modèle depuis Java, C#, JavaScript, etc.
+            #   ✅ Idéal si l'inférence se fait hors Python (API Java, appli mobile...)
+            #   ✅ Performances d'inférence souvent meilleures (runtime optimisé)
+            #   ❌ Conversion parfois complexe, tous les modèles ne sont pas supportés
+            #   ❌ Le Pipeline sklearn peut poser des problèmes à la conversion
+            #   import onnxmltools; mlflow.onnx.log_model(...)
+        
+            # ---------------------------------------------------------------------
+            # TODO : Loggez la matrice de confusion avec mlflow.log_figure()
+            #
+            # La figure est déjà créée ci-dessous, il vous reste à la logger !
+            # INDICE : mlflow.log_figure(fig, "confusion_matrix.png")
+            # ---------------------------------------------------------------------
+            from sklearn.metrics import ConfusionMatrixDisplay
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots()
+            ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
+            ax.set_title("Matrice de confusion")
+
+            # TODO : Loggez la figure dans MLflow ici
+            mlflow.log_figure(fig, "confusion_matrix.png")
+
+            plt.close(fig)  # Libérer la mémoire
+
+            run_id = mlflow.active_run().info.run_id
+            print(f"✅ MLflow Run ID : {run_id}")
+            print(f"   Accuracy : {accuracy:.4f}, F1 : {f1:.4f}")
+            print(f"   ⭐ Pipeline loggé (scaler + model en UN artefact)")
+        
+        return {"pipeline": pipeline, "accuracy": accuracy, "f1": f1, "run_id": run_id}
 
         # En attendant que vous complétiez, version sans tracking :
         print(f"⚠️  MLflow non configuré. Accuracy : {accuracy:.4f}")
@@ -712,16 +749,20 @@ On combine tout dans un Pipeline :
     # INDICE : def churn_pipeline_v4(n_estimators: int = 100, max_depth: int = 10):
     # -------------------------------------------------------------------------
     @flow(name="churn-pipeline-v4-mlflow", log_prints=True)
-    def churn_pipeline_v4():  # <-- Ajoutez les paramètres ici
+    def churn_pipeline_v4(n_estimators: int = 100, max_depth: int = 10):  # <-- Ajoutez les paramètres ici
         """Pipeline avec intégration MLflow."""
         data = load_data()
         X, y = prepare_features(data)
+        
+        # TODO : Défi 4.3 : Enregistrez le modèle dans le Model Registry avec mlflow.register_model()
+        # INDICE : mlflow.register_model(f"runs:/{run_id}/model", "churn-model")
+        mlflow.register_model(f"runs:/{train_with_mlflow(X, y, n_estimators, max_depth, 'prefect-churn-exercises')['run_id']}/model", "churn-model")
 
         # TODO : Utilisez les paramètres du flow au lieu de valeurs fixes
         result = train_with_mlflow(
             X, y,
-            n_estimators=100,  # <-- Remplacez par le paramètre du flow
-            max_depth=10,      # <-- Remplacez par le paramètre du flow
+            n_estimators=n_estimators,  # <-- Remplacez par le paramètre du flow
+            max_depth=max_depth,      # <-- Remplacez par le paramètre du flow
             experiment_name="prefect-churn-exercises"
         )
 
@@ -737,7 +778,9 @@ On combine tout dans un Pipeline :
         print(f"📊 MLflow tracking : {MLFLOW_TRACKING_URI}\n")
 
     try:
-        result = churn_pipeline_v4()
+        # result = churn_pipeline_v4(n_estimators=100, max_depth=10)
+        for n_est, depth in [(50, 5), (200, 20), (150, 15)]:
+            result = churn_pipeline_v4(n_estimators=n_est, max_depth=depth)
         print("\n✅ ÉTAPE 4 TERMINÉE !")
         print("   Passez à l'étape 5 : python Prefect_Exercises.py etape5")
         if MLFLOW_AVAILABLE and result.get("run_id"):
@@ -759,9 +802,6 @@ On combine tout dans un Pipeline :
     # DÉFI 4.3 : Utilisez mlflow.register_model() pour enregistrer le modèle
     #            dans le Model Registry avec le nom "churn-model".
     # -------------------------------------------------------------------------
-
-    # Rappel : Pour exécuter cette étape, utilisez la commande :
-    # uv run .\pipelines\workshop\02_prefect\Prefect_Exercises.py etape4 (depuis le terminal à la racine du projet)
 
 
 # =============================================================================
@@ -815,6 +855,7 @@ def run_etape5():
     # TODO : Créez un sous-flow pour la préparation des données
     # INDICE : @flow(name="data-preparation")
     # -------------------------------------------------------------------------
+    @flow(name="data-preparation", log_prints=True)
     def data_preparation_flow() -> tuple:
         """
         Sous-flow : Préparation des données
@@ -822,16 +863,16 @@ def run_etape5():
         Charge les données et applique le preprocessing.
         Retourne (data, X, y) pour être utilisé par d'autres flows.
         """
-        # TODO : Décorer cette fonction avec @flow
         # TODO : Appeler load_data() puis prepare_features()
-        data = None  # <-- Remplacez
-        X, y = None, None  # <-- Remplacez
+        data = load_data()
+        X, y = prepare_features(data)
         return data, X, y
 
     # -------------------------------------------------------------------------
     # TODO : Créez un sous-flow pour l'entraînement
     # INDICE : @flow(name="model-training")
     # -------------------------------------------------------------------------
+    @flow(name="model-training", log_prints=True)
     def training_flow(X, y, n_estimators: int = 100, max_depth: int = 10, experiment_name: str = "prefect-churn-exercises") -> dict:
         """
         Sous-flow : Entraînement du modèle
@@ -840,14 +881,15 @@ def run_etape5():
         """
         # TODO : Décorer cette fonction avec @flow
         # TODO : Appeler train()
-        result = None  # <-- Remplacez par train(X, y, n_estimators, max_depth)
+        result = train(X, y, n_estimators=n_estimators, max_depth=max_depth)
         return result
-
+    
     # -------------------------------------------------------------------------
-    # DÉFI 5.1 : Flow inference_pipeline
+    # Défi 5.1 : Flow inference_pipeline
     # TODO : Créez le flow 'inference_pipeline' ici qui réutilise data_preparation_flow
     #        mais charge un modèle existant (au lieu de l'entraîner).
     # -------------------------------------------------------------------------
+    @flow(name="inference-pipeline", log_prints=True)
     def inference_pipeline():
         """
         Pipeline d'inférence - Réutilise la préparation des données
@@ -856,28 +898,26 @@ def run_etape5():
         en réutilisant data_preparation_flow, mais en chargeant un modèle pré-entraîné
         au lieu de l'entraîner à nouveau.
         """
-        # TODO : Décorer cette fonction avec @flow(name="inference-pipeline", log_prints=True)
         # TODO : Appeler data_preparation_flow pour obtenir data, X, y
-        data, X, y = None, None, None  # <-- Remplacez par data_preparation_flow()
+        data, X, y = data_preparation_flow()
 
         # TODO : Charger un modèle existant (par exemple depuis MLflow ou un fichier)
         #       et faire des prédictions avec save_preds()
         #       (Vous pouvez simuler le chargement du modèle si vous n'avez pas encore de modèle enregistré)
-        #       Exemple : model = mlflow.sklearn.load_model("models:/churn-model/latest")
-        model = None  # <-- Remplacez par le chargement du modèle
+        model = mlflow.sklearn.load_model("models:/churn-model/latest")  # Nom enregistré au Défi 4.3 via mlflow.register_model()
         feature_cols = X.columns.tolist() if X is not None else []
-
+        
         if model:
             save_preds(data, model, feature_cols)
             print("✅ Prédictions sauvegardées avec le modèle chargé.")
         else:
-            print("⚠️  Aucun modèle chargé. Implémentez le chargement pour tester save_preds.")
+            print("⚠️  Aucun modèle chargé. Simulez le chargement pour tester save_preds.")
 
     # -------------------------------------------------------------------------
     # TODO : Créez le flow principal qui orchestre les sous-flows
     # -------------------------------------------------------------------------
     @flow(name="churn-pipeline-v5-modular", log_prints=True)
-    def churn_pipeline_v5(n_estimators: int = 100, max_depth: int = 10, save_predictions: bool = True):
+    def churn_pipeline_v5(n_estimators: int = 100, max_depth: int = 10, save_predictions: bool = True, experiment_name: str = "prefect-churn-exercises") -> dict:
         """
         Pipeline principal - Orchestre les sous-flows.
 
@@ -897,7 +937,7 @@ def run_etape5():
             return None
 
         # Étape 2 : Entraînement (sous-flow)
-        result = training_flow(X, y, n_estimators, max_depth)
+        result = training_flow(X, y, n_estimators, max_depth, experiment_name=experiment_name)
 
         if result is None:
             print("❌ L'entraînement a échoué.")
@@ -908,6 +948,15 @@ def run_etape5():
             save_preds(data, result["model"], result["feature_cols"])
 
         print(f"🎉 Pipeline terminé ! Accuracy : {result['metrics']['accuracy']:.4f}")
+
+        # ---------------------------------------------------------------------
+        # DÉFI 5.1 : Lancez le pipeline d'inférence à la suite de l'entraînement !
+        # Décommentez la ligne ci-dessous une fois qu'un modèle est enregistré
+        # dans MLflow (via mlflow.register_model() au Défi 4.3).
+        #
+        inference_pipeline()
+        # ---------------------------------------------------------------------
+
         return result
 
     # Exécuter
@@ -922,6 +971,8 @@ def run_etape5():
             print("\n✅ ÉTAPE 5 RÉUSSIE !")
             print("   Votre pipeline est maintenant modulaire et réutilisable !")
             print("   Passez à l'étape finale : python Prefect_Exercises.py deploy")
+
+
     except Exception as e:
         print(f"\n❌ Erreur : {e}")
         print("   Vérifiez les décorateurs @flow sur les sous-flows.")
@@ -930,20 +981,17 @@ def run_etape5():
     # MINI-DÉFIS :
     # -------------------------------------------------------------------------
     #
-    # DÉFI 5.1 : Complétez le flow 'inference_pipeline' défini ci-dessus
-    #            qui réutilise data_preparation_flow mais charge un modèle existant.
+    # DÉFI 5.1 : Créez un flow 'inference_pipeline' qui réutilise
+    #            data_preparation_flow mais charge un modèle existant.
     #
     # DÉFI 5.2 : Dans l'interface Prefect, trouvez le graphe d'exécution.
-    #            Voyez-vous les sous-flows imbriqués ?
+    #            Voyez-vous les sous-flows imbriqués ? 
     #            (Il y a un bouton permettant de cacher/montrer les sous-flows disponible pour mieux les repérer)
     #
     # DÉFI 5.3 : Ajoutez un paramètre 'experiment_name' au flow principal
     #            et propagez-le jusqu'à training_flow.
     #            (Notez qu'il est déjà présent dans training_flow, mais il n'est pas encore utilisé dans le flow principal)
     # -------------------------------------------------------------------------
-
-    # Rappel : Pour exécuter cette étape, utilisez la commande :
-    # uv run .\pipelines\workshop\02_prefect\Prefect_Exercises.py etape5 (depuis le terminal à la racine du projet)
 
 
 # =============================================================================
@@ -1028,14 +1076,12 @@ def run_deploy():
     #              cron="*/2 * * * *"  # Toutes les 2 minutes
     #          )
     # -------------------------------------------------------------------------
-
-    # Décommentez cette ligne pour activer le déploiement :
-    #
-    # churn_production_pipeline.serve(
-    #     name="churn-scheduled",
-    #     cron="*/2 * * * *",  # Toutes les 2 minutes
-    #     tags=["production", "churn", "exercises"]
-    # )
+    
+    churn_production_pipeline.serve(
+        name="churn-scheduled",
+        cron="*/2 * * * *",  # Toutes les 2 minutes
+        tags=["production", "churn", "exercises"] # Tags 
+    )
 
     # En attendant que vous décommentiez, exécution simple :
     print("\n⚠️  Pour activer le déploiement planifié, décommentez le bloc")
@@ -1053,9 +1099,6 @@ def run_deploy():
     # Note : Le serveur Prefect continuera de tourner et d'exécuter le pipeline selon la planification.
     # Appuyez sur Ctrl+C pour l'arrêter quand vous avez fini de tester.
     # Votre terminal est utilisé pour le serveur Prefect, donc vous ne verrez pas les prints du pipeline tant que le serveur tourne. C'est normal !
-
-    # Rappel : Pour exécuter cette étape, utilisez la commande :
-    # uv run .\pipelines\workshop\02_prefect\Prefect_Exercises.py deploy (depuis le terminal à la racine du projet)
 
     # -------------------------------------------------------------------------
     # MINI-DÉFIS :
@@ -1150,7 +1193,7 @@ def run_notifications():
         """Tâche qui échoue volontairement pour tester les notifications."""
         raise Exception("Échec simulé pour tester les notifications !")
 
-    @flow(name="notification-test-flow", log_prints=True)  # <-- Ajoutez on_failure=[notify_discord_on_failure]
+    @flow(name="notification-test-flow", log_prints=True, on_failure=[notify_discord_on_failure])
     def notification_test_flow():
         """Flow de test pour les notifications."""
         print("🧪 Test des notifications...")
@@ -1187,9 +1230,6 @@ def run_notifications():
         print("Exemple avec variable d'environnement :")
         print("   export DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'")
         print("   python Prefect_Exercises.py notif")
-
-    # Rappel : Pour exécuter cette étape, utilisez la commande :
-    # uv run .\pipelines\workshop\02_prefect\Prefect_Exercises.py notif (depuis le terminal à la racine du projet)
 
     # -------------------------------------------------------------------------
     # MINI-DÉFIS :
@@ -1284,64 +1324,51 @@ def run_worker_demo():
     print("=" * 70)
 
     # -------------------------------------------------------------------------
-    # TODO : Déployez le flow vers le work pool "default-pool"
-    # INDICE : churn_worker_pipeline.deploy(
-    #              name="worker-training",
-    #              work_pool_name="default-pool",
-    #              cron="*/5 * * * *",  # Toutes les 5 minutes
-    #              tags=["workshop", "ml", "worker-demo"],
-    #              parameters={
-    #                  "n_estimators": 100,
-    #                  "max_depth": 10
-    #              }
-    #          )
+    # SOLUTION : Déployer le flow vers le work pool "default-pool"
     # -------------------------------------------------------------------------
+    deployment_id = churn_worker_pipeline.deploy(
+        name="worker-training-exercises",
+        work_pool_name="default-pool",
+        cron="*/5 * * * *",  # Toutes les 5 minutes
+        tags=["workshop", "ml", "worker-demo", "exercises"],
+        description="Pipeline exécuté par le worker Docker - toutes les 5 minutes",
+        parameters={
+            "n_estimators": 100,
+            "max_depth": 10
+        }
+    )
 
-    # Décommentez et complétez ce bloc :
-    #
-    # deployment_id = churn_worker_pipeline.deploy(
-    #     name="...",                    # Nom du déploiement
-    #     work_pool_name="...",          # "default-pool" (configuré dans Docker)
-    #     cron="...",                    # Planification cron
-    #     tags=["workshop", "worker"],   # Tags pour organiser
-    #     parameters={                   # Paramètres par défaut
-    #         "n_estimators": 100,
-    #         "max_depth": 10
-    #     }
-    # )
-
-    print("\n⚠️  Pour activer le déploiement Docker, décommentez le bloc")
-    print("   churn_worker_pipeline.deploy(...) dans le code.\n")
-    print("   Exécution unique locale en attendant...\n")
-
-    churn_worker_pipeline()
-
-    print("\n" + "=" * 70)
-    print("✅ Pour voir l'exécution DOCKER :")
-    print("   1. Décommentez le bloc .deploy() dans le code")
-    print("   2. Réexécutez : python Prefect_Exercises.py worker-demo")
-    print("   3. Ouvrez http://localhost:4200 > Deployments")
-    print("   4. Cliquez 'Quick Run' ou attendez la planification")
-    print("   5. Voir les logs : docker-compose logs -f prefect-worker")
+    print()
     print("=" * 70)
+    print("✅ DÉPLOIEMENT RÉUSSI !")
+    print("=" * 70)
+    print(f"""
+Le flow est maintenant déployé vers le worker Docker.
 
-    # -------------------------------------------------------------------------
-    # MINI-DÉFIS :
-    # -------------------------------------------------------------------------
-    #
-    # DÉFI 8.1 : Vérifiez que le worker Docker est en cours d'exécution :
-    #            docker-compose ps
-    #            (prefect-worker doit être "Up")
-    #
-    # DÉFI 8.2 : Déclenchez manuellement le flow depuis l'interface :
-    #            http://localhost:4200 > Deployments > Quick Run
-    #
-    # DÉFI 8.3 : Observez les logs du worker en temps réel :
-    #            docker-compose logs -f prefect-worker
-    # -------------------------------------------------------------------------
+PROCHAINES ÉTAPES :
 
-    # Rappel : Pour exécuter cette étape, utilisez la commande :
-    # uv run .\pipelines\workshop\02_prefect\Prefect_Exercises.py worker-demo
+1. Ouvrir l'interface Prefect : http://localhost:4200
+   → Aller dans Deployments
+   → Trouver "churn-worker-pipeline/worker-training-exercises"
+
+2. Déclencher manuellement :
+   → Cliquer sur "Quick Run"
+   → Observer l'exécution dans l'onglet "Runs"
+
+3. Voir les logs du worker :
+   docker-compose logs -f prefect-worker
+
+4. Vérifier MLflow : http://localhost:5000
+
+5. Pour supprimer le déploiement :
+   → Interface Prefect > Deployments > Delete
+
+COMPARAISON :
+  - 'deploy' (serve)  : Exécution locale, terminal bloqué
+  - 'worker-demo'     : Exécution Docker, terminal libre ← VOUS ÊTES ICI
+""")
+
+    return deployment_id
 
 
 # =============================================================================

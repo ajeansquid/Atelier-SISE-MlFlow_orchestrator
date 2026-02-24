@@ -39,15 +39,17 @@ DÉVELOPPER → SUIVRE → ENREGISTRER → SERVIR → AUTOMATISER
 ### Phase 2 : Orchestration avec Automatisation (Focus Principal)
 
 **Atelier Prefect** (`pipelines/workshop/02_prefect/`) :
-- `Prefect_Workshop.py` : Référence complète (7 parties)
 - `Prefect_Exercises.py` : **Exercices interactifs** (approche Fil Rouge - un vrai pipeline Churn à blinder progressivement !)
-- Partie 1 : Tasks & Flows (bases)
-- Partie 2 : Résilience (réessais, backoff exponentiel)
-- Partie 3 : Efficacité (cache, entraînement de modèles en parallèle)
-- Partie 4 : Flexibilité (paramètres, sous-flows)
-- Partie 5 : Pipeline complet avec intégration MLflow
-- **Partie 6 : AUTOMATISATION - Déployer, planifier, regarder l'exécution !**
-- Partie 7 : Notifications (Discord/Slack)
+- `Prefect_Workshop.py` : Référence complète (solutions)
+
+**Progression des exercices :**
+- Étape 1 : Tasks & Flows (bases)
+- Étape 2 : Résilience (réessais, backoff exponentiel)
+- Étape 3 : Efficacité (cache)
+- Étape 4 : MLflow + sklearn Pipeline
+- Étape 5 : Sous-flows (organisation modulaire)
+- **deploy : AUTOMATISATION - Déployer, planifier, regarder l'exécution !**
+- notif : Notifications Discord/Slack (bonus)
 
 ### Phase 3 : Bonus Dagster
 
@@ -142,20 +144,14 @@ docker-compose ps
 # Attendre le statut "healthy"
 ```
 
-### 4. Générer les Données d'Exemple
+### 4. Données d'Exemple
 
-```bash
-# Activer le venv (Windows PowerShell)
-.venv\Scripts\activate
+Les données sont déjà incluses dans le dépôt : `data/customer_data.csv`
 
-# Activer le venv (Mac/Linux)
-source .venv/bin/activate
-
-# Générer les données
-python generate_sample_data.py
-```
-
-Cela crée `data/customer_data.csv` utilisé par tous les pipelines.
+> **Fallback :** Si le fichier est manquant, vous pouvez le regénérer :
+> ```bash
+> python generate_sample_data.py
+> ```
 
 ### 5. Accéder aux Interfaces
 
@@ -167,24 +163,30 @@ Cela crée `data/customer_data.csv` utilisé par tous les pipelines.
 
 ### 6. Exécuter l'Atelier
 
-**Apprendre les patterns (Parties 1-7) :**
+**Exercices interactifs (approche Fil Rouge) :**
 ```bash
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part1  # Tasks & Flows
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part2  # Réessais
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part3  # Cache & Parallélisme
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part4  # Paramètres
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part5  # Pipeline Complet + MLflow
-python pipelines/workshop/02_prefect/Prefect_Workshop.py part7  # Notifications Discord/Slack
+python pipelines/workshop/02_prefect/Prefect_Exercises.py etape1  # Tasks & Flows
+python pipelines/workshop/02_prefect/Prefect_Exercises.py etape2  # Résilience (réessais)
+python pipelines/workshop/02_prefect/Prefect_Exercises.py etape3  # Efficacité (cache)
+python pipelines/workshop/02_prefect/Prefect_Exercises.py etape4  # MLflow + sklearn Pipeline
+python pipelines/workshop/02_prefect/Prefect_Exercises.py etape5  # Sous-flows
 ```
 
-**Voir l'automatisation réelle (Partie 6) :**
+> **Référence :** Si vous êtes bloqué, consultez `Prefect_Workshop.py` pour voir la solution complète.
+
+**Voir l'automatisation réelle :**
 ```bash
-python pipelines/workshop/02_prefect/Prefect_Workshop.py deploy
+python pipelines/workshop/02_prefect/Prefect_Exercises.py deploy
 ```
 
 Cela déploie un flow planifié qui s'exécute toutes les 2 minutes. Observez :
 - **Interface Prefect** : Voir les déploiements et les exécutions automatiques
 - **Interface MLflow** : Voir les expérimentations apparaître automatiquement
+
+**Bonus - Notifications :**
+```bash
+python pipelines/workshop/02_prefect/Prefect_Exercises.py notif  # Discord/Slack
+```
 
 **Dagster :**
 ```bash
@@ -364,7 +366,7 @@ def customer_features(raw_data: pd.DataFrame) -> pd.DataFrame:
 ### Configuration & Docker (~15 min)
 1. Démarrer la stack Docker, vérifier que les services sont sains
 2. Installer les dépendances Python
-3. Générer les données d'exemple
+3. Vérifier que les données sont présentes (`data/customer_data.csv`)
 
 ### Partie 1 : Fondamentaux MLflow (~45 min)
 1. Commencer avec le notebook désordonné - identifier les points de friction
@@ -372,8 +374,8 @@ def customer_features(raw_data: pd.DataFrame) -> pd.DataFrame:
 3. Apprendre le tracking, les modèles, le registre, le serving
 
 ### Partie 2 : Patterns d'Orchestration (~50 min)
-1. Travailler sur les Parties 1-5 de l'Atelier Prefect
-2. Apprendre les réessais, le cache, le parallélisme, les paramètres
+1. Travailler sur les exercices Prefect (`Prefect_Exercises.py` - étapes 1-5)
+2. Apprendre les réessais, le cache, les sous-flows
 3. Construire un pipeline ML complet avec MLflow
 
 ### Partie 3 : Automatisation Réelle (~20 min)

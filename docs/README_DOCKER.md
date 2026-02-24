@@ -183,10 +183,29 @@ cp .env.example .env
 Ensuite éditer `.env` avec vos ports souhaités :
 
 ```bash
-MLFLOW_PORT=5001
-PREFECT_PORT=4201
-DAGSTER_PORT=3001
+MLFLOW_PORT=5050
+PREFECT_PORT=4200
+DAGSTER_PORT=3000
+
+# ⚠️  IMPORTANT : Mettre à jour aussi l'URL !
+MLFLOW_TRACKING_URI=http://localhost:5050
 ```
+
+### ⚠️ Utilisateurs Mac : Port 5000 occupé
+
+**macOS Monterey+** utilise le port 5000 pour AirPlay Receiver. Deux solutions :
+
+**Option 1 (recommandée) : Changer le port MLflow**
+
+Créer/éditer `.env` :
+```bash
+MLFLOW_PORT=5050
+MLFLOW_TRACKING_URI=http://localhost:5050
+```
+
+**Option 2 : Désactiver AirPlay Receiver**
+
+Préférences Système → Général → AirDrop et Handoff → **Récepteur AirPlay : OFF**
 
 ### Le worker Prefect n'exécute pas les flows
 
