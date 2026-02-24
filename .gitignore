@@ -1,6 +1,9 @@
 # Project-specific
 CLAUDE.md
 .claude
+Gemini.md
+.gemini
+
 
 # Python
 __pycache__/
@@ -83,6 +86,9 @@ logs/
 
 # pdfs
 *.pdf
+!MLflow_Lyon2_Dark.pdf
+
+# Misc
 docs/prefect/datacamp_tutorial.md
 data/predictions_workshop.csv
 data/predictions_dagster.csv
@@ -90,3 +96,4 @@ data/predictions_exercises.csv
 pipelines/workshop/02_prefect/Prefect_Exercises_correction.py
 pipelines/workshop/03_dagster/Dagster_Exercises.py
 Pipelines/workshop/03_dagster/Dagster_Exercises_correction.py
+
