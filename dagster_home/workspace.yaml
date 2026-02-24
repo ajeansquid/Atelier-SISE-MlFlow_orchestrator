@@ -1,7 +1,7 @@
 load_from:
   - python_file:
-      relative_path: pipelines/workshop/03_dagster/Dagster_Exercises.py
+      relative_path: ../pipelines/workshop/03_dagster/Dagster_Exercises.py
       working_directory: /app
   - python_file:
-      relative_path: pipelines/workshop/03_dagster/Dagster_Workshop.py
+      relative_path: ../pipelines/workshop/03_dagster/Dagster_Workshop.py
       working_directory: /app
