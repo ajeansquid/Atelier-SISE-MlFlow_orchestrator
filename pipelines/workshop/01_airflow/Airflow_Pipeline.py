@@ -33,6 +33,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import os
 import tempfile
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -43,10 +44,10 @@ EXPERIMENT_NAME = "customer-churn-airflow"
 MODEL_NAME = "churn-predictor-airflow"  # Pour le registre de modèles
 
 # Obtenir la racine du projet (parent de pipelines/workshop/01_airflow/)
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
-OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_airflow.csv")
-INFERENCE_OUTPUT_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_airflow_inference.csv")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DATA_PATH = PROJECT_ROOT / "data" / "customer_data.csv"
+OUTPUT_PATH = PROJECT_ROOT / "data" / "predictions_airflow.csv"
+INFERENCE_OUTPUT_PATH = PROJECT_ROOT / "data" / "predictions_airflow_inference.csv"
 RANDOM_SEED = 42
 
 # Colonnes de features utilisées pour l'entraînement
@@ -73,7 +74,7 @@ def load_customer_data(**context):
     print("Chargement des données clients...")
 
     # Essayer de charger depuis CSV d'abord
-    if os.path.exists(DATA_PATH):
+    if DATA_PATH.exists():
         print(f"Chargement depuis {DATA_PATH}")
         df = pd.read_csv(DATA_PATH)
     else:
@@ -107,12 +108,12 @@ def load_customer_data(**context):
     print(f"{len(df)} clients chargés")
 
     # ❌ AIRFLOW : Impossible de retourner le DataFrame - doit sauvegarder sur disque !
-    temp_dir = tempfile.gettempdir()
-    temp_path = os.path.join(temp_dir, f"customer_data_{context['run_id']}.parquet")
+    temp_dir = Path(tempfile.gettempdir())
+    temp_path = temp_dir / f"customer_data_{context['run_id']}.parquet"
     df.to_parquet(temp_path)
 
     # ❌ AIRFLOW : Doit utiliser XCom pour passer les données entre les tâches
-    context['ti'].xcom_push(key='data_path', value=temp_path)
+    context['ti'].xcom_push(key='data_path', value=str(temp_path))
     context['ti'].xcom_push(key='row_count', value=len(df))
 
 
@@ -146,12 +147,12 @@ def engineer_features(**context):
     print(f"Features créées. Shape : {df.shape}")
 
     # ❌ AIRFLOW : Sauvegarder dans un nouveau fichier temporaire
-    temp_dir = tempfile.gettempdir()
-    features_path = os.path.join(temp_dir, f"features_{context['run_id']}.parquet")
+    temp_dir = Path(tempfile.gettempdir())
+    features_path = temp_dir / f"features_{context['run_id']}.parquet"
     df.to_parquet(features_path)
 
     # ❌ AIRFLOW : Pousser le chemin via XCom
-    ti.xcom_push(key='features_path', value=features_path)
+    ti.xcom_push(key='features_path', value=str(features_path))
 
 
 def train_model(**context):
@@ -206,21 +207,21 @@ def train_model(**context):
         mlflow_run_id = run.info.run_id
 
     # ❌ AIRFLOW : Sauvegarder le modèle dans un fichier temp (impossible via XCom - trop volumineux)
-    temp_dir = tempfile.gettempdir()
-    model_path = os.path.join(temp_dir, f"model_{context['run_id']}.pkl")
+    temp_dir = Path(tempfile.gettempdir())
+    model_path = temp_dir / f"model_{context['run_id']}.pkl"
     with open(model_path, 'wb') as f:
         pickle.dump(model, f)
 
     # ❌ AIRFLOW : Sauvegarder aussi les données de test pour l'évaluation
-    test_data_path = os.path.join(temp_dir, f"test_data_{context['run_id']}.parquet")
+    test_data_path = temp_dir / f"test_data_{context['run_id']}.parquet"
     test_df = pd.DataFrame(X_test)
     test_df['churned'] = y_test.values
     test_df.to_parquet(test_data_path)
 
     # ❌ AIRFLOW : Pousser tous les chemins via XCom
-    ti.xcom_push(key='model_path', value=model_path)
+    ti.xcom_push(key='model_path', value=str(model_path))
     ti.xcom_push(key='mlflow_run_id', value=mlflow_run_id)
-    ti.xcom_push(key='test_data_path', value=test_data_path)
+    ti.xcom_push(key='test_data_path', value=str(test_data_path))
 
     print(f"Modèle entraîné. MLflow run : {mlflow_run_id}")
 
@@ -305,11 +306,11 @@ def generate_predictions(**context):
     })
 
     # ❌ AIRFLOW : Sauvegarder les prédictions dans un fichier temporaire
-    temp_dir = tempfile.gettempdir()
-    predictions_path = os.path.join(temp_dir, f"predictions_{context['run_id']}.parquet")
+    temp_dir = Path(tempfile.gettempdir())
+    predictions_path = temp_dir / f"predictions_{context['run_id']}.parquet"
     predictions.to_parquet(predictions_path)
 
-    ti.xcom_push(key='predictions_path', value=predictions_path)
+    ti.xcom_push(key='predictions_path', value=str(predictions_path))
     ti.xcom_push(key='prediction_count', value=len(predictions))
 
     print(f"Prédictions générées pour {len(predictions)} clients")
@@ -328,7 +329,7 @@ def save_predictions(**context):
     predictions = pd.read_parquet(predictions_path)
 
     # S'assurer que le répertoire de sortie existe
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     # Sauvegarder en CSV
     predictions.to_csv(OUTPUT_PATH, index=False)
@@ -381,8 +382,8 @@ def cleanup_temp_files(**context):
 
     # Supprimer les fichiers
     for path in paths_to_delete:
-        if path and os.path.exists(path):
-            os.remove(path)
+        if path and Path(path).exists():
+            Path(path).unlink()
             print(f"Supprimé {path}")
 
     print("Nettoyage terminé !")
@@ -400,7 +401,7 @@ def load_inference_data(**context):
     """
     print("Chargement des données clients pour l'inférence...")
 
-    if os.path.exists(DATA_PATH):
+    if DATA_PATH.exists():
         df = pd.read_csv(DATA_PATH)
     else:
         # Générer des données synthétiques
@@ -422,11 +423,11 @@ def load_inference_data(**context):
     print(f"{len(df)} clients chargés pour l'inférence")
 
     # ❌ AIRFLOW : Sauvegarder sur disque
-    temp_dir = tempfile.gettempdir()
-    temp_path = os.path.join(temp_dir, f"inference_data_{context['run_id']}.parquet")
+    temp_dir = Path(tempfile.gettempdir())
+    temp_path = temp_dir / f"inference_data_{context['run_id']}.parquet"
     df.to_parquet(temp_path)
 
-    context['ti'].xcom_push(key='inference_data_path', value=temp_path)
+    context['ti'].xcom_push(key='inference_data_path', value=str(temp_path))
     context['ti'].xcom_push(key='inference_row_count', value=len(df))
 
 
@@ -455,11 +456,11 @@ def engineer_inference_features(**context):
     print(f"Shape des features d'inférence : {df.shape}")
 
     # ❌ AIRFLOW : Sauvegarder sur disque
-    temp_dir = tempfile.gettempdir()
-    features_path = os.path.join(temp_dir, f"inference_features_{context['run_id']}.parquet")
+    temp_dir = Path(tempfile.gettempdir())
+    features_path = temp_dir / f"inference_features_{context['run_id']}.parquet"
     df.to_parquet(features_path)
 
-    ti.xcom_push(key='inference_features_path', value=features_path)
+    ti.xcom_push(key='inference_features_path', value=str(features_path))
 
 
 def load_model_from_registry(**context):
@@ -488,12 +489,12 @@ def load_model_from_registry(**context):
     print(f"Modèle version {version} chargé")
 
     # ❌ AIRFLOW : Sauvegarder le modèle sur disque
-    temp_dir = tempfile.gettempdir()
-    model_path = os.path.join(temp_dir, f"inference_model_{context['run_id']}.pkl")
+    temp_dir = Path(tempfile.gettempdir())
+    model_path = temp_dir / f"inference_model_{context['run_id']}.pkl"
     with open(model_path, 'wb') as f:
         pickle.dump(model, f)
 
-    context['ti'].xcom_push(key='inference_model_path', value=model_path)
+    context['ti'].xcom_push(key='inference_model_path', value=str(model_path))
     context['ti'].xcom_push(key='loaded_model_version', value=version)
 
 
@@ -532,11 +533,11 @@ def run_batch_inference(**context):
     print(f"{len(predictions)} prédictions générées ({high_risk} à haut risque)")
 
     # ❌ AIRFLOW : Sauvegarder sur disque
-    temp_dir = tempfile.gettempdir()
-    predictions_path = os.path.join(temp_dir, f"inference_predictions_{context['run_id']}.parquet")
+    temp_dir = Path(tempfile.gettempdir())
+    predictions_path = temp_dir / f"inference_predictions_{context['run_id']}.parquet"
     predictions.to_parquet(predictions_path)
 
-    ti.xcom_push(key='inference_predictions_path', value=predictions_path)
+    ti.xcom_push(key='inference_predictions_path', value=str(predictions_path))
     ti.xcom_push(key='inference_prediction_count', value=len(predictions))
     ti.xcom_push(key='inference_high_risk_count', value=int(high_risk))
 
@@ -552,12 +553,12 @@ def save_inference_predictions(**context):
 
     predictions = pd.read_parquet(predictions_path)
 
-    os.makedirs(os.path.dirname(INFERENCE_OUTPUT_PATH), exist_ok=True)
+    INFERENCE_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     predictions.to_csv(INFERENCE_OUTPUT_PATH, index=False)
 
     print(f"{len(predictions)} prédictions sauvegardées")
 
-    ti.xcom_push(key='inference_output_path', value=INFERENCE_OUTPUT_PATH)
+    ti.xcom_push(key='inference_output_path', value=str(INFERENCE_OUTPUT_PATH))
 
 
 def cleanup_inference_temp_files(**context):
@@ -576,8 +577,8 @@ def cleanup_inference_temp_files(**context):
     ]
 
     for path in paths_to_delete:
-        if path and os.path.exists(path):
-            os.remove(path)
+        if path and Path(path).exists():
+            Path(path).unlink()
             print(f"Supprimé {path}")
 
     print("Nettoyage d'inférence terminé !")

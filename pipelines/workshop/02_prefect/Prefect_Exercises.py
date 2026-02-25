@@ -46,6 +46,7 @@
 import sys
 import os
 import time
+from pathlib import Path
 from datetime import timedelta, datetime
 
 import mlflow
@@ -54,12 +55,12 @@ import numpy as np
 
 # Charger automatiquement le fichier .env (PREFECT_API_URL, MLFLOW_TRACKING_URI)
 from dotenv import load_dotenv
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(PROJECT_ROOT / ".env")
 
 # Configuration
-DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
-PREDICTIONS_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_exercises.csv")
+DATA_PATH = PROJECT_ROOT / "data" / "customer_data.csv"
+PREDICTIONS_PATH = PROJECT_ROOT / "data" / "predictions_exercises.csv"
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 
 # =============================================================================
@@ -81,7 +82,7 @@ def load_churn_data(file_path: str = DATA_PATH) -> pd.DataFrame:
     """
     print(f"📂 Chargement des données depuis {file_path}...")
 
-    if os.path.exists(file_path):
+    if Path(file_path).exists():
         df = pd.read_csv(file_path)
     else:
         # Données synthétiques si le fichier n'existe pas
@@ -1230,41 +1231,11 @@ def run_worker_demo():
     Cette étape démontre la différence entre serve() et deploy().
     Le flow sera exécuté par le worker Docker, pas localement !
     """
-    from prefect import flow, task
-    from prefect.tasks import task_input_hash
+    from prefect import flow
 
     print("=" * 70)
     print("ÉTAPE 8 : DÉPLOIEMENT DOCKER - Le worker exécute le flow")
     print("=" * 70)
-
-    # Pipeline complet avec tous les patterns
-    @task(retries=3, retry_delay_seconds=[5, 10, 20])
-    def load_data() -> pd.DataFrame:
-        return load_churn_data(DATA_PATH)
-
-    @task(cache_key_fn=task_input_hash, cache_expiration=timedelta(hours=1))
-    def prepare_features(df: pd.DataFrame) -> tuple:
-        return preprocess_data(df)
-
-    @task
-    def train(X, y, n_estimators: int, max_depth: int) -> dict:
-        return train_model(X, y, n_estimators=n_estimators, max_depth=max_depth)
-
-    @flow(name="churn-worker-pipeline", log_prints=True)
-    def churn_worker_pipeline(n_estimators: int = 100, max_depth: int = 10):
-        """
-        Pipeline déployé vers le worker Docker.
-
-        Ce pipeline sera exécuté par le worker, pas localement !
-        """
-        print(f"🐳 Exécution dans le worker à {datetime.now().strftime('%H:%M:%S')}")
-
-        data = load_data()
-        X, y = prepare_features(data)
-        result = train(X, y, n_estimators, max_depth)
-
-        print(f"✅ Terminé ! Accuracy : {result['metrics']['accuracy']:.4f}")
-        return result
 
     print("""
 📋 DIFFÉRENCE serve() vs deploy() :
@@ -1277,6 +1248,16 @@ def run_worker_demo():
              Terminal LIBÉRÉ immédiatement
              Architecture de production
 
+📋 CONCEPT CLÉ : from_source()
+
+  Pour deploy() vers un work pool, le worker doit pouvoir accéder au code.
+  On utilise from_source() pour indiquer où se trouve le code :
+
+  flow.from_source(
+      source="chemin/vers/projet",           # Où est le code
+      entrypoint="fichier.py:nom_du_flow"    # Quel flow exécuter
+  ).deploy(...)
+
 """)
 
     print("=" * 70)
@@ -1285,40 +1266,60 @@ def run_worker_demo():
 
     # -------------------------------------------------------------------------
     # TODO : Déployez le flow vers le work pool "default-pool"
-    # INDICE : churn_worker_pipeline.deploy(
-    #              name="worker-training",
-    #              work_pool_name="default-pool",
-    #              cron="*/5 * * * *",  # Toutes les 5 minutes
-    #              tags=["workshop", "ml", "worker-demo"],
-    #              parameters={
-    #                  "n_estimators": 100,
-    #                  "max_depth": 10
-    #              }
-    #          )
+    #
+    # Pour un work pool de type "process", on utilise from_source() pour
+    # indiquer où se trouve le code que le worker doit exécuter.
+    #
+    # On utilise le flow production_pipeline du fichier Prefect_Workshop.py
+    # qui est défini au niveau module (et donc accessible au worker).
+    #
+    # INDICE :
+    #   deployed_flow = flow.from_source(
+    #       source=str(PROJECT_ROOT),
+    #       entrypoint="pipelines/workshop/02_prefect/Prefect_Workshop.py:production_pipeline"
+    #   )
+    #
+    #   deployment_id = deployed_flow.deploy(
+    #       name="worker-training-exercises",
+    #       work_pool_name="default-pool",
+    #       cron="*/5 * * * *",
+    #       tags=["workshop", "ml", "worker-demo"],
+    #       parameters={
+    #           "n_estimators": 100,
+    #           "max_depth": 10,
+    #           "experiment_name": "workshop-exercises-worker",
+    #           "model_name": "churn-predictor-exercises"
+    #       }
+    #   )
     # -------------------------------------------------------------------------
 
     # Décommentez et complétez ce bloc :
     #
-    # deployment_id = churn_worker_pipeline.deploy(
+    # deployed_flow = flow.from_source(
+    #     source=str(PROJECT_ROOT),
+    #     entrypoint="..."  # pipelines/workshop/02_prefect/Prefect_Workshop.py:production_pipeline
+    # )
+    #
+    # deployment_id = deployed_flow.deploy(
     #     name="...",                    # Nom du déploiement
     #     work_pool_name="...",          # "default-pool" (configuré dans Docker)
-    #     cron="...",                    # Planification cron
+    #     cron="...",                    # Planification cron (ex: "*/5 * * * *")
     #     tags=["workshop", "worker"],   # Tags pour organiser
     #     parameters={                   # Paramètres par défaut
     #         "n_estimators": 100,
-    #         "max_depth": 10
+    #         "max_depth": 10,
+    #         "experiment_name": "workshop-exercises-worker",
+    #         "model_name": "churn-predictor-exercises"
     #     }
     # )
 
     print("\n⚠️  Pour activer le déploiement Docker, décommentez le bloc")
-    print("   churn_worker_pipeline.deploy(...) dans le code.\n")
-    print("   Exécution unique locale en attendant...\n")
-
-    churn_worker_pipeline()
+    print("   flow.from_source(...).deploy(...) dans le code.\n")
+    print("   Consultez Prefect_Exercises_correction.py pour la solution.\n")
 
     print("\n" + "=" * 70)
     print("✅ Pour voir l'exécution DOCKER :")
-    print("   1. Décommentez le bloc .deploy() dans le code")
+    print("   1. Décommentez le bloc dans le code")
     print("   2. Réexécutez : python Prefect_Exercises.py worker-demo")
     print("   3. Ouvrez http://localhost:4200 > Deployments")
     print("   4. Cliquez 'Quick Run' ou attendez la planification")

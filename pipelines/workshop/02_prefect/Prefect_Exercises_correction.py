@@ -46,6 +46,7 @@
 import sys
 import os
 import time
+from pathlib import Path
 from datetime import timedelta, datetime
 
 import mlflow
@@ -54,12 +55,12 @@ import numpy as np
 
 # Charger automatiquement le fichier .env (PREFECT_API_URL, MLFLOW_TRACKING_URI)
 from dotenv import load_dotenv
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(PROJECT_ROOT / ".env")
 
 # Configuration
-DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
-PREDICTIONS_PATH = os.path.join(PROJECT_ROOT, "data", "predictions_exercises.csv")
+DATA_PATH = PROJECT_ROOT / "data" / "customer_data.csv"
+PREDICTIONS_PATH = PROJECT_ROOT / "data" / "predictions_exercises.csv"
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 
 # =============================================================================
@@ -81,7 +82,7 @@ def load_churn_data(file_path: str = DATA_PATH) -> pd.DataFrame:
     """
     print(f"📂 Chargement des données depuis {file_path}...")
 
-    if os.path.exists(file_path):
+    if Path(file_path).exists():
         df = pd.read_csv(file_path)
     else:
         # Données synthétiques si le fichier n'existe pas
@@ -1277,35 +1278,6 @@ def run_worker_demo():
     print("ÉTAPE 8 : DÉPLOIEMENT DOCKER - Le worker exécute le flow")
     print("=" * 70)
 
-    # Pipeline complet avec tous les patterns
-    @task(retries=3, retry_delay_seconds=[5, 10, 20])
-    def load_data() -> pd.DataFrame:
-        return load_churn_data(DATA_PATH)
-
-    @task(cache_key_fn=task_input_hash, cache_expiration=timedelta(hours=1))
-    def prepare_features(df: pd.DataFrame) -> tuple:
-        return preprocess_data(df)
-
-    @task
-    def train(X, y, n_estimators: int, max_depth: int) -> dict:
-        return train_model(X, y, n_estimators=n_estimators, max_depth=max_depth)
-
-    @flow(name="churn-worker-pipeline", log_prints=True)
-    def churn_worker_pipeline(n_estimators: int = 100, max_depth: int = 10):
-        """
-        Pipeline déployé vers le worker Docker.
-
-        Ce pipeline sera exécuté par le worker, pas localement !
-        """
-        print(f"🐳 Exécution dans le worker à {datetime.now().strftime('%H:%M:%S')}")
-
-        data = load_data()
-        X, y = prepare_features(data)
-        result = train(X, y, n_estimators, max_depth)
-
-        print(f"✅ Terminé ! Accuracy : {result['metrics']['accuracy']:.4f}")
-        return result
-
     print("""
 📋 DIFFÉRENCE serve() vs deploy() :
 
@@ -1324,9 +1296,22 @@ def run_worker_demo():
     print("=" * 70)
 
     # -------------------------------------------------------------------------
-    # SOLUTION : Déployer le flow vers le work pool "default-pool"
+    # SOLUTION : Utiliser from_source() pour déployer vers un work pool
+    #
+    # Pour un work pool de type "process", on doit indiquer où se trouve
+    # le code que le worker doit exécuter. On utilise le flow
+    # production_pipeline du fichier Prefect_Workshop.py qui est défini
+    # au niveau module.
     # -------------------------------------------------------------------------
-    deployment_id = churn_worker_pipeline.deploy(
+    from prefect import flow
+
+    # Charger le flow depuis le Workshop via from_source()
+    deployed_flow = flow.from_source(
+        source=str(PROJECT_ROOT),
+        entrypoint="pipelines/workshop/02_prefect/Prefect_Workshop.py:production_pipeline"
+    )
+
+    deployment_id = deployed_flow.deploy(
         name="worker-training-exercises",
         work_pool_name="default-pool",
         cron="*/5 * * * *",  # Toutes les 5 minutes
@@ -1334,7 +1319,9 @@ def run_worker_demo():
         description="Pipeline exécuté par le worker Docker - toutes les 5 minutes",
         parameters={
             "n_estimators": 100,
-            "max_depth": 10
+            "max_depth": 10,
+            "experiment_name": "workshop-exercises-worker",
+            "model_name": "churn-predictor-exercises"
         }
     )
 
@@ -1349,7 +1336,7 @@ PROCHAINES ÉTAPES :
 
 1. Ouvrir l'interface Prefect : http://localhost:4200
    → Aller dans Deployments
-   → Trouver "churn-worker-pipeline/worker-training-exercises"
+   → Trouver "churn-prediction-pipeline/worker-training-exercises"
 
 2. Déclencher manuellement :
    → Cliquer sur "Quick Run"

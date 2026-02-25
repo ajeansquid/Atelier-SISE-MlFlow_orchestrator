@@ -21,15 +21,16 @@
 
 import os
 import sys
+from pathlib import Path
 import pandas as pd
 import numpy as np
 
 # Configuration
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 # Charger le fichier .env pour MLflow
 from dotenv import load_dotenv
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+load_dotenv(PROJECT_ROOT / ".env")
 
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 

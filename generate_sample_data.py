@@ -12,10 +12,10 @@ sinon ils génèrent des données synthétiques à la volée.
 
 import pandas as pd
 import numpy as np
-import os
+from pathlib import Path
 
 # Configuration
-OUTPUT_PATH = "data/customer_data.csv"
+OUTPUT_PATH = Path("data/customer_data.csv")
 RANDOM_SEED = 42
 N_CUSTOMERS = 5000
 
@@ -147,7 +147,7 @@ def main():
     print(df.describe().round(2))
 
     # S'assurer que le répertoire de sortie existe
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     # Sauvegarder en CSV
     df.to_csv(OUTPUT_PATH, index=False)

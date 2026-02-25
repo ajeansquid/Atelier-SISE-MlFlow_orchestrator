@@ -52,12 +52,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from datetime import datetime
 import os
+from pathlib import Path
 
 # -----------------------------------------------------------------------------
 # Configuration (identique à Prefect)
 # -----------------------------------------------------------------------------
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DATA_PATH = PROJECT_ROOT / "data" / "customer_data.csv"
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 EXPERIMENT_NAME = "workshop-dagster"
 
@@ -118,7 +119,7 @@ def ws_raw_customer_data() -> pd.DataFrame:
     """
     print("Chargement des données clients brutes...")
 
-    if os.path.exists(DATA_PATH):
+    if DATA_PATH.exists():
         df = pd.read_csv(DATA_PATH)
     else:
         np.random.seed(42)
@@ -324,14 +325,14 @@ def saved_predictions(churn_predictions: pd.DataFrame) -> dict:
     - Vous pouvez re-matérialiser juste cet asset pour re-sauvegarder
     - La chaîne de dépendances est claire et visible
     """
-    output_path = os.path.join(PROJECT_ROOT, "data", "predictions_dagster.csv")
+    output_path = PROJECT_ROOT / "data" / "predictions_dagster.csv"
 
     churn_predictions.to_csv(output_path, index=False)
 
     print(f"Sauvegardé {len(churn_predictions)} prédictions dans {output_path}")
 
     return {
-        "path": output_path,
+        "path": str(output_path),
         "record_count": len(churn_predictions),
         "high_risk_count": int((churn_predictions['churn_probability'] > 0.7).sum()),
         "saved_at": datetime.now().isoformat()

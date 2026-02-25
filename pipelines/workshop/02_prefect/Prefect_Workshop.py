@@ -32,12 +32,8 @@
 # =============================================================================
 
 import sys
-import io
-
-# Fix d'encodage pour Windows (sinon les logs avec caractères spéciaux peuvent causer des erreurs)
-if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+import os
+from pathlib import Path
 
 from prefect import flow, task, serve
 from prefect.tasks import task_input_hash
@@ -70,12 +66,12 @@ except ImportError:
 # -----------------------------------------------------------------------------
 # Charger le fichier .env pour la configuration locale (PREFECT_API_URL, MLFLOW_TRACKING_URI)
 from dotenv import load_dotenv
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(PROJECT_ROOT / ".env")
 
 # Lors de l'exécution dans Docker, ces variables d'environnement sont définies par docker-compose
-PROJECT_ROOT = os.getenv("PROJECT_ROOT", PROJECT_ROOT)
-DATA_PATH = os.path.join(PROJECT_ROOT, "data", "customer_data.csv")
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", str(PROJECT_ROOT)))
+DATA_PATH = PROJECT_ROOT / "data" / "customer_data.csv"
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 PREFECT_API_URL = os.getenv("PREFECT_API_URL", "http://localhost:4200/api")
 
@@ -111,7 +107,7 @@ def load_data() -> pd.DataFrame:
     """
     print("Chargement des données clients...")
 
-    if os.path.exists(DATA_PATH):
+    if DATA_PATH.exists():
         df = pd.read_csv(DATA_PATH)
     else:
         # Générer des données synthétiques
@@ -397,9 +393,9 @@ def generate_predictions(model, df: pd.DataFrame) -> pd.DataFrame:
 
 
 @task
-def save_predictions(predictions: pd.DataFrame, output_path: str) -> str:
+def save_predictions(predictions: pd.DataFrame, output_path: str | Path) -> str:
     """Sauvegarder les prédictions en CSV."""
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     predictions.to_csv(output_path, index=False)
     print(f"Sauvegardé dans {output_path}")
     return output_path
@@ -442,7 +438,7 @@ def production_pipeline(
 
     # Inférence
     predictions = generate_predictions(result["model"], df)
-    output_path = os.path.join(PROJECT_ROOT, "data", "predictions_workshop.csv")
+    output_path = PROJECT_ROOT / "data" / "predictions_workshop.csv"
     save_predictions(predictions, output_path)
 
     print("\n" + "=" * 60)
@@ -573,7 +569,12 @@ DIFFÉRENCE serve() vs deploy() :
 
     # Créer le déploiement vers le work pool Docker
     # Le worker dans docker-compose écoute "default-pool"
-    deployment_id = production_pipeline.deploy(
+    # Note: Pour un work pool de type "process", on utilise from_source() pour
+    # indiquer où se trouve le code que le worker doit exécuter.
+    deployment_id = production_pipeline.from_source(
+        source=str(PROJECT_ROOT),  # Chemin vers le code source
+        entrypoint="pipelines/workshop/02_prefect/Prefect_Workshop.py:production_pipeline"
+    ).deploy(
         name="worker-training",
         work_pool_name="default-pool",
         cron="*/5 * * * *",  # Toutes les 5 minutes
